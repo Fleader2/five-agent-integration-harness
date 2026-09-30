@@ -1,0 +1,8 @@
+{
+  "true_parameters": {
+    "k1": 0.5,
+    "k2": 0.2,
+    "k3": 0.1
+  },
+  "notes": "k3 is intentionally poorly identified by the training set (which never observes S4)."
+}

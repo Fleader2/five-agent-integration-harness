@@ -1,0 +1,10 @@
+{
+  "request_id": "harness-real-yeast-no-validation-data-check",
+  "validation_observations": {
+    "observation_set_id": "no-real-yeast-held-out-data-available",
+    "observations": []
+  },
+  "candidate_experiments": null,
+  "overfit_ratio_threshold": 3.0,
+  "max_default_candidates": 10
+}

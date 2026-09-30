@@ -1,0 +1,17 @@
+{
+  "request_id": "harness-real-yeast-no-data-check",
+  "targets": [
+    {
+      "target_kind": "PARAMETER",
+      "target_id": "k_01ce3f13-cb37-4a20-b0ed-f4b2d8e762dd_2278f6f2-5bdd-4b0c-8e36-b2947332cf1e",
+      "bounds": {"lower": 1e-6, "upper": 1000.0}
+    }
+  ],
+  "observations": {
+    "observation_set_id": "no-real-yeast-observations-available",
+    "observations": []
+  },
+  "optimizer": {"method": "L-BFGS-B", "n_multistarts": 3, "max_iterations": 200, "function_tolerance": 1e-10},
+  "authorized_provenance_classes": [],
+  "authorized_parameter_ids": []
+}

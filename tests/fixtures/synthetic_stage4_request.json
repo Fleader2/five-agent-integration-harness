@@ -1,0 +1,98 @@
+{
+  "request_id": "synthetic-ground-truth-calibration",
+  "targets": [
+    {
+      "target_kind": "PARAMETER",
+      "target_id": "k1",
+      "bounds": {
+        "lower": 0.001,
+        "upper": 5.0
+      }
+    },
+    {
+      "target_kind": "PARAMETER",
+      "target_id": "k2",
+      "bounds": {
+        "lower": 0.001,
+        "upper": 5.0
+      }
+    },
+    {
+      "target_kind": "PARAMETER",
+      "target_id": "k3",
+      "bounds": {
+        "lower": 0.001,
+        "upper": 5.0
+      }
+    }
+  ],
+  "observations": {
+    "observation_set_id": "synthetic-ground-truth-train-set",
+    "observations": [
+      {
+        "observation_id": "obs-S1",
+        "target_species_id": "S1",
+        "kind": "TIME_SERIES",
+        "time_points": [
+          1.0,
+          2.0,
+          4.0,
+          6.0,
+          9.0,
+          12.0,
+          16.0,
+          20.0,
+          25.0,
+          30.0
+        ],
+        "values": [
+          6.065306919472521,
+          3.6787954986605933,
+          1.3533561259399287,
+          0.49787372273643815,
+          0.11109126223465689,
+          0.024787950280759474,
+          0.0033547092383877427,
+          0.00045401390071037246,
+          3.7268077481325e-05,
+          3.0591784395697005e-06
+        ],
+        "partition": "TRAIN"
+      },
+      {
+        "observation_id": "obs-S2",
+        "target_species_id": "S2",
+        "kind": "TIME_SERIES",
+        "time_points": [
+          1.0,
+          2.0,
+          4.0,
+          6.0,
+          9.0,
+          12.0,
+          16.0,
+          20.0,
+          25.0,
+          30.0
+        ],
+        "values": [
+          3.5366677079583,
+          5.040674979493389,
+          5.233222610312858,
+          4.190114116351383,
+          2.5698294881588057,
+          1.4706527344205853,
+          0.6737789456038761,
+          0.3045039939168687,
+          0.11223701998911088,
+          0.04130744518268627
+        ],
+        "partition": "TRAIN"
+      }
+    ]
+  },
+  "optimizer": {
+    "n_multistarts": 4,
+    "max_iterations": 300
+  }
+}

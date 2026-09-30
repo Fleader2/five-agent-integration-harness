@@ -1,0 +1,52 @@
+{
+  "request_id": "synthetic-ground-truth-validation",
+  "validation_observations": {
+    "observation_set_id": "synthetic-ground-truth-holdout-set",
+    "observations": [
+      {
+        "observation_id": "obs-S1",
+        "target_species_id": "S1",
+        "kind": "TIME_SERIES",
+        "time_points": [
+          3.0,
+          8.0,
+          15.0,
+          22.0,
+          28.0,
+          35.0
+        ],
+        "values": [
+          2.2313027283609275,
+          0.18315818964781033,
+          0.005530969934075834,
+          0.00016702300078912715,
+          8.315678259074946e-06,
+          2.511298400013032e-07
+        ]
+      },
+      {
+        "observation_id": "obs-S2",
+        "target_species_id": "S2",
+        "kind": "TIME_SERIES",
+        "time_points": [
+          3.0,
+          8.0,
+          15.0,
+          22.0,
+          28.0,
+          35.0
+        ],
+        "values": [
+          5.4280227630191025,
+          3.059678443652334,
+          0.8205662589196406,
+          0.2043439866088014,
+          0.061617212908819545,
+          0.015197620384851087
+        ]
+      }
+    ]
+  },
+  "overfit_ratio_threshold": 3.0,
+  "max_default_candidates": 10
+}
