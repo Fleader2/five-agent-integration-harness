@@ -15,12 +15,18 @@ Every agent runs as an isolated subprocess, in its own venv, with its own reposi
 The harness's own code has **zero runtime dependencies** — it only reads/writes JSON files and
 shells out.
 
-See `docs/01_orchestration_architecture.md` through `docs/06_version1_success_criteria.md` for
-full detail, including two disclosed scope decisions worth reading before trusting any run's own
-output: how the Agent 1 → Agent 2 boundary is handled (consumed artifact + one live, cheap
-boundary check, never a blind hand-chained re-invocation of Agent 2's own eleven-plus-stage
-internal pipeline), and why three sibling repositories independently named the same real
-contract shape three different things.
+Agent 2 is invoked through its own canonical orchestration entrypoint
+(`app.agent2.pipeline.run_agent2_pipeline`) — a genuine, live subprocess call for both canonical
+fixtures, never a copy of a pre-existing artifact. All five agents consume and produce the one
+canonical `agent2-downstream-v1` contract for the Agent 2 boundary; nothing in this harness
+re-stamps a contract version at any boundary.
+
+See `docs/00_five_agent_workflow_v1_architecture.md` for the one-page system map (repository
+roles, the contract/version matrix, and the V1 invariants), and `docs/01_orchestration_architecture.md`
+through `docs/06_version1_success_criteria.md` for full detail — including the one disclosed
+scope gap worth reading before trusting any run's own output: Agent 2's own pipeline does not yet
+populate species initial concentrations or compartment initial volume for any input (see
+`docs/01_orchestration_architecture.md`).
 
 ## Two canonical fixtures
 
