@@ -7,9 +7,8 @@ from app.harness.adapters import (
     build_agent4_handoff,
     build_agent5_handoff,
 )
-from app.harness.version import AGENT4_EXPECTED_HANDOFF_VERSION, AGENT5_EXPECTED_HANDOFF_VERSION
 
-_AGENT2_MODEL = {"contract_version": "agent2-to-agent3-v1", "model_id": "m1", "species": []}
+_AGENT2_MODEL = {"contract_version": "agent2-downstream-v1", "model_id": "m1", "species": []}
 
 
 def test_agent3_report_to_diagnostics_view_extracts_expected_fields():
@@ -39,7 +38,10 @@ def test_agent3_report_to_diagnostics_view_extracts_expected_fields():
     assert view["heuristic_parameter_ids"] == ["k1"]
 
 
-def test_build_agent4_handoff_restamps_contract_version_only():
+def test_build_agent4_handoff_passes_agent2_model_through_unchanged():
+    """**Five-Agent Workflow V1 Hardening increment:** no restamping of any kind occurs here
+    any more -- ``agent2_model`` is wrapped exactly as given, the ``_restamp_contract_version``
+    workaround having been removed entirely."""
     agent3_report = {
         "report_id": "r1",
         "agent3_contract_version": "0.1",
@@ -53,17 +55,20 @@ def test_build_agent4_handoff_restamps_contract_version_only():
         "sufficient_for_agent4": True,
     }
     handoff = build_agent4_handoff(_AGENT2_MODEL, agent3_report)
-    assert handoff["agent2_model"]["contract_version"] == AGENT4_EXPECTED_HANDOFF_VERSION
-    # Every other field is untouched.
+    assert handoff["agent2_model"] is _AGENT2_MODEL
+    assert handoff["agent2_model"]["contract_version"] == "agent2-downstream-v1"
     assert handoff["agent2_model"]["model_id"] == "m1"
     assert handoff["agent2_model"]["species"] == []
     # The original dict passed in is never mutated.
-    assert _AGENT2_MODEL["contract_version"] == "agent2-to-agent3-v1"
+    assert _AGENT2_MODEL["contract_version"] == "agent2-downstream-v1"
 
 
-def test_build_agent5_handoff_restamps_contract_version_only():
+def test_build_agent5_handoff_passes_agent2_model_through_unchanged():
+    """**Five-Agent Workflow V1 Hardening increment:** no restamping of any kind occurs here
+    any more -- ``agent2_model`` is wrapped exactly as given."""
     agent4_report = {"calibration": {"parameter_estimates": []}}
     handoff = build_agent5_handoff(_AGENT2_MODEL, agent4_report)
-    assert handoff["agent2_model"]["contract_version"] == AGENT5_EXPECTED_HANDOFF_VERSION
+    assert handoff["agent2_model"] is _AGENT2_MODEL
+    assert handoff["agent2_model"]["contract_version"] == "agent2-downstream-v1"
     assert handoff["agent4_report"] == agent4_report
-    assert _AGENT2_MODEL["contract_version"] == "agent2-to-agent3-v1"
+    assert _AGENT2_MODEL["contract_version"] == "agent2-downstream-v1"

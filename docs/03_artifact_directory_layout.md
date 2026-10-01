@@ -6,10 +6,13 @@ actual reproducible evidence).
 
 ```
 artifacts/runs/<run_id>/
-  stage1_output.json      Agent 1's own real, live-queried Agent1CuratedKnowledgeView
-                          (real-yeast fixture only; absent for the synthetic fixture)
-  stage2_output.json      The agent2_model artifact this run used (either copied from an
-                          already-real committed artifact, or the synthetic ground-truth model)
+  stage1_output.json      Agent 1's own real, live-queried Agent1CuratedKnowledgeView (real-yeast
+                          fixture), or the static synthetic_agent1_view.json fixture (Fixture B)
+  stage2_output_raw.json  Agent 2's own real, live canonical-pipeline output, completely
+                          unmodified (both fixtures)
+  stage2_output.json      stage2_output_raw.json, after app.harness.synthetic_fixture's one
+                          disclosed initial-condition patch (Fixture B only -- byte-identical to
+                          stage2_output_raw.json for Fixture A, which supplies no stage2_postprocess)
   stage3_output.json      Agent 3's own full Agent3Report
   stage4_input.json       {"agent2_model": ..., "agent3_diagnostics": ...} -- Agent 4's own
                           handoff contract, built by app.harness.adapters.build_agent4_handoff
@@ -33,13 +36,13 @@ unexpected difference is immediately visible without diffing the full JSON by ha
 | File | Used by |
 |---|---|
 | `sce00061_agent1_curated_knowledge_view.json` | A real, freshly-captured (this session) copy of Agent 1's own live-queried output for the real organism -- kept as a reference/fallback artifact; a fresh live run re-queries the database directly rather than reading this file |
-| `sce00061_agent2_model.json` | Fixture A's Stage 2 (consumed, not regenerated) |
 | `sce00061_calibration_request.json` | Fixture A's Stage 4 request |
 | `sce00061_validation_request.json` | Fixture A's Stage 5 request |
-| `synthetic_agent2_model.json` | Fixture B's Stage 2 input |
-| `synthetic_stage4_request.json` | Fixture B's Stage 4 request (train observations + 3 targets) |
+| `synthetic_agent1_view.json` | Fixture B's Stage 1 output -- a static, hand-authored Agent 1 view, fed through Agent 2's own real canonical pipeline for Stage 2 |
+| `sample_agent2_downstream_model.json` | **Not** used by either canonical fixture -- a real canonical-pipeline output used only by `tests/harness/test_version_mismatch.py`/`test_stage_failure.py` as a base to deliberately corrupt |
+| `synthetic_stage4_request.json` | Fixture B's Stage 4 request (train observations + 3 targets, keyed by Agent 2's own real generated species/parameter ids) |
 | `synthetic_stage5_request.json` | Fixture B's Stage 5 request (held-out observations) |
-| `synthetic_ground_truth_manifest.json` | The true `k1`/`k2`/`k3` values, for comparison in the completion report and tests |
+| `synthetic_ground_truth_manifest.json` | The true rate-constant values, for comparison in the completion report and tests |
 
 ## Why `artifacts/runs/` is gitignored but `tests/fixtures/` is not
 

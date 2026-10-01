@@ -1,0 +1,260 @@
+{
+  "contract_version": "agent2-downstream-v1",
+  "model_id": "model::network::synthetic-ground-truth-organism::decomposition::network::synthetic-ground-truth-organism",
+  "network_id": "network::synthetic-ground-truth-organism",
+  "antimony_text": "model m_model__network__synthetic_ground_truth_organism__decomposition__network__synthetic_ground_truth_organism()\n\n// compartments\ncompartment c_compartment_1;  // compartment_id=compartment-1 (initial size unresolved)\n\n// species\nspecies s_compound_S1__in__compartment_1 in c_compartment_1;  // species_id=compound-S1::in::compartment-1\nspecies s_compound_S2__in__compartment_1 in c_compartment_1;  // species_id=compound-S2::in::compartment-1\nspecies s_compound_S3__in__compartment_1 in c_compartment_1;  // species_id=compound-S3::in::compartment-1\nspecies s_compound_S4__in__compartment_1 in c_compartment_1;  // species_id=compound-S4::in::compartment-1\n\n// reactions\nJ_reaction_1: s_compound_S1__in__compartment_1 -> s_compound_S2__in__compartment_1; p_k_reaction_1_protein_1 * s_compound_S1__in__compartment_1;  // reaction_id=reaction-1 kinetic_law_id=kinetic-law::reaction-1::kinetic-law::protein-1 law_type=MASS_ACTION reversible=reversible catalytic_context=protein-1\nJ_reaction_2: s_compound_S2__in__compartment_1 -> s_compound_S3__in__compartment_1; p_k_reaction_2_protein_2 * s_compound_S2__in__compartment_1;  // reaction_id=reaction-2 kinetic_law_id=kinetic-law::reaction-2::kinetic-law::protein-2 law_type=MASS_ACTION reversible=reversible catalytic_context=protein-2\nJ_reaction_3: s_compound_S3__in__compartment_1 -> s_compound_S4__in__compartment_1; p_k_reaction_3_protein_3 * s_compound_S3__in__compartment_1;  // reaction_id=reaction-3 kinetic_law_id=kinetic-law::reaction-3::kinetic-law::protein-3 law_type=MASS_ACTION reversible=reversible catalytic_context=protein-3\n\n// parameters\np_k_reaction_1_protein_1 = 1;  // parameter_id=k_reaction-1_protein-1 source=HEURISTIC_INITIALIZATION unit=per_sec\np_k_reaction_2_protein_2 = 1;  // parameter_id=k_reaction-2_protein-2 source=HEURISTIC_INITIALIZATION unit=per_sec\np_k_reaction_3_protein_3 = 1;  // parameter_id=k_reaction-3_protein-3 source=HEURISTIC_INITIALIZATION unit=per_sec\n\nend\n",
+  "antimony_generator_version": "antimony-generation-v4",
+  "readiness": "EXECUTABLE",
+  "unresolved_reaction_ids": [],
+  "unresolved_kinetic_law_ids": [],
+  "compartments": [
+    {
+      "compartment_id": "compartment-1",
+      "name": "cyto",
+      "initial_volume": null,
+      "volume_unit": null,
+      "constant": null
+    }
+  ],
+  "species": [
+    {
+      "species_id": "compound-S1::in::compartment-1",
+      "name": "S1",
+      "compartment_id": "compartment-1",
+      "source_compound_id": "compound-S1",
+      "source_enzyme_state_id": null,
+      "initial_amount": null,
+      "initial_concentration": null,
+      "constant": null,
+      "boundary_condition": null,
+      "initialization_source": null
+    },
+    {
+      "species_id": "compound-S2::in::compartment-1",
+      "name": "S2",
+      "compartment_id": "compartment-1",
+      "source_compound_id": "compound-S2",
+      "source_enzyme_state_id": null,
+      "initial_amount": null,
+      "initial_concentration": null,
+      "constant": null,
+      "boundary_condition": null,
+      "initialization_source": null
+    },
+    {
+      "species_id": "compound-S3::in::compartment-1",
+      "name": "S3",
+      "compartment_id": "compartment-1",
+      "source_compound_id": "compound-S3",
+      "source_enzyme_state_id": null,
+      "initial_amount": null,
+      "initial_concentration": null,
+      "constant": null,
+      "boundary_condition": null,
+      "initialization_source": null
+    },
+    {
+      "species_id": "compound-S4::in::compartment-1",
+      "name": "S4",
+      "compartment_id": "compartment-1",
+      "source_compound_id": "compound-S4",
+      "source_enzyme_state_id": null,
+      "initial_amount": null,
+      "initial_concentration": null,
+      "constant": null,
+      "boundary_condition": null,
+      "initialization_source": null
+    }
+  ],
+  "reactions": [
+    {
+      "reaction_id": "reaction-1",
+      "name": "S1_to_S2",
+      "reversible": true,
+      "participants": [
+        {
+          "species_id": "compound-S1::in::compartment-1",
+          "role": "REACTANT",
+          "stoichiometry": "1"
+        },
+        {
+          "species_id": "compound-S2::in::compartment-1",
+          "role": "PRODUCT",
+          "stoichiometry": "1"
+        }
+      ]
+    },
+    {
+      "reaction_id": "reaction-2",
+      "name": "S2_to_S3",
+      "reversible": true,
+      "participants": [
+        {
+          "species_id": "compound-S2::in::compartment-1",
+          "role": "REACTANT",
+          "stoichiometry": "1"
+        },
+        {
+          "species_id": "compound-S3::in::compartment-1",
+          "role": "PRODUCT",
+          "stoichiometry": "1"
+        }
+      ]
+    },
+    {
+      "reaction_id": "reaction-3",
+      "name": "S3_to_S4",
+      "reversible": true,
+      "participants": [
+        {
+          "species_id": "compound-S3::in::compartment-1",
+          "role": "REACTANT",
+          "stoichiometry": "1"
+        },
+        {
+          "species_id": "compound-S4::in::compartment-1",
+          "role": "PRODUCT",
+          "stoichiometry": "1"
+        }
+      ]
+    }
+  ],
+  "kinetic_laws": [
+    {
+      "kinetic_law_id": "kinetic-law::reaction-1::kinetic-law::protein-1",
+      "reaction_id": "reaction-1",
+      "law_type": "MASS_ACTION",
+      "expression": "k_reaction-1_protein-1 * compound-S1::in::compartment-1",
+      "parameter_ids": [
+        "k_reaction-1_protein-1"
+      ],
+      "species_ids": [
+        "compound-S1::in::compartment-1"
+      ],
+      "enzyme_state_id": null,
+      "protein_id": "protein-1",
+      "complex_id": null,
+      "assumptions": [
+        "Kinetic-law assignment_source=HEURISTIC; reason_codes=(TENTATIVE_MASS_ACTION_DEFAULT).",
+        "Tentative mass-action default: the underlying kinetic mechanism is not curated or confirmed. Never upgraded to a deterministic or curated law by this increment.",
+        "Unresolved: (KINETIC_MECHANISM_NOT_CURATED)."
+      ]
+    },
+    {
+      "kinetic_law_id": "kinetic-law::reaction-2::kinetic-law::protein-2",
+      "reaction_id": "reaction-2",
+      "law_type": "MASS_ACTION",
+      "expression": "k_reaction-2_protein-2 * compound-S2::in::compartment-1",
+      "parameter_ids": [
+        "k_reaction-2_protein-2"
+      ],
+      "species_ids": [
+        "compound-S2::in::compartment-1"
+      ],
+      "enzyme_state_id": null,
+      "protein_id": "protein-2",
+      "complex_id": null,
+      "assumptions": [
+        "Kinetic-law assignment_source=HEURISTIC; reason_codes=(TENTATIVE_MASS_ACTION_DEFAULT).",
+        "Tentative mass-action default: the underlying kinetic mechanism is not curated or confirmed. Never upgraded to a deterministic or curated law by this increment.",
+        "Unresolved: (KINETIC_MECHANISM_NOT_CURATED)."
+      ]
+    },
+    {
+      "kinetic_law_id": "kinetic-law::reaction-3::kinetic-law::protein-3",
+      "reaction_id": "reaction-3",
+      "law_type": "MASS_ACTION",
+      "expression": "k_reaction-3_protein-3 * compound-S3::in::compartment-1",
+      "parameter_ids": [
+        "k_reaction-3_protein-3"
+      ],
+      "species_ids": [
+        "compound-S3::in::compartment-1"
+      ],
+      "enzyme_state_id": null,
+      "protein_id": "protein-3",
+      "complex_id": null,
+      "assumptions": [
+        "Kinetic-law assignment_source=HEURISTIC; reason_codes=(TENTATIVE_MASS_ACTION_DEFAULT).",
+        "Tentative mass-action default: the underlying kinetic mechanism is not curated or confirmed. Never upgraded to a deterministic or curated law by this increment.",
+        "Unresolved: (KINETIC_MECHANISM_NOT_CURATED)."
+      ]
+    }
+  ],
+  "parameters": [
+    {
+      "parameter_id": "k_reaction-1_protein-1",
+      "name": "k_reaction-1_protein-1",
+      "source": "HEURISTIC_INITIALIZATION",
+      "value": "1",
+      "unit": "per_sec",
+      "reaction_id": "reaction-1",
+      "kinetic_law_assignment_id": "reaction-1::kinetic-law::protein-1",
+      "uncertainty_text": "Tentative mass-action default (TENTATIVE_MASS_ACTION_DEFAULT): the underlying mechanism is unconfirmed, so no curated or AI-predicted value is used even if one exists for this context. No experimental or AI-predicted evidence exists for this parameter; heuristically initialized to a numerically well-behaved starting value (1 per_sec) for simulation purposes only -- never a biochemical claim of any kind. Requires calibration.",
+      "provenance_refs": [],
+      "lower_bound": null,
+      "upper_bound": null,
+      "fixed": null
+    },
+    {
+      "parameter_id": "k_reaction-2_protein-2",
+      "name": "k_reaction-2_protein-2",
+      "source": "HEURISTIC_INITIALIZATION",
+      "value": "1",
+      "unit": "per_sec",
+      "reaction_id": "reaction-2",
+      "kinetic_law_assignment_id": "reaction-2::kinetic-law::protein-2",
+      "uncertainty_text": "Tentative mass-action default (TENTATIVE_MASS_ACTION_DEFAULT): the underlying mechanism is unconfirmed, so no curated or AI-predicted value is used even if one exists for this context. No experimental or AI-predicted evidence exists for this parameter; heuristically initialized to a numerically well-behaved starting value (1 per_sec) for simulation purposes only -- never a biochemical claim of any kind. Requires calibration.",
+      "provenance_refs": [],
+      "lower_bound": null,
+      "upper_bound": null,
+      "fixed": null
+    },
+    {
+      "parameter_id": "k_reaction-3_protein-3",
+      "name": "k_reaction-3_protein-3",
+      "source": "HEURISTIC_INITIALIZATION",
+      "value": "1",
+      "unit": "per_sec",
+      "reaction_id": "reaction-3",
+      "kinetic_law_assignment_id": "reaction-3::kinetic-law::protein-3",
+      "uncertainty_text": "Tentative mass-action default (TENTATIVE_MASS_ACTION_DEFAULT): the underlying mechanism is unconfirmed, so no curated or AI-predicted value is used even if one exists for this context. No experimental or AI-predicted evidence exists for this parameter; heuristically initialized to a numerically well-behaved starting value (1 per_sec) for simulation purposes only -- never a biochemical claim of any kind. Requires calibration.",
+      "provenance_refs": [],
+      "lower_bound": null,
+      "upper_bound": null,
+      "fixed": null
+    }
+  ],
+  "model_assumptions": [
+    {
+      "assumption_id": "assumption::tentative-law::kinetic-law::reaction-1::kinetic-law::protein-1",
+      "category": "kinetics",
+      "statement": "Reaction reaction-1 uses a tentative mass-action default kinetic law; the actual mechanism is not curated or confirmed.",
+      "related_entity_ids": [
+        "reaction-1",
+        "kinetic-law::reaction-1::kinetic-law::protein-1"
+      ],
+      "reason_code": "TENTATIVE_MASS_ACTION_DEFAULT"
+    },
+    {
+      "assumption_id": "assumption::tentative-law::kinetic-law::reaction-2::kinetic-law::protein-2",
+      "category": "kinetics",
+      "statement": "Reaction reaction-2 uses a tentative mass-action default kinetic law; the actual mechanism is not curated or confirmed.",
+      "related_entity_ids": [
+        "reaction-2",
+        "kinetic-law::reaction-2::kinetic-law::protein-2"
+      ],
+      "reason_code": "TENTATIVE_MASS_ACTION_DEFAULT"
+    },
+    {
+      "assumption_id": "assumption::tentative-law::kinetic-law::reaction-3::kinetic-law::protein-3",
+      "category": "kinetics",
+      "statement": "Reaction reaction-3 uses a tentative mass-action default kinetic law; the actual mechanism is not curated or confirmed.",
+      "related_entity_ids": [
+        "reaction-3",
+        "kinetic-law::reaction-3::kinetic-law::protein-3"
+      ],
+      "reason_code": "TENTATIVE_MASS_ACTION_DEFAULT"
+    }
+  ]
+}

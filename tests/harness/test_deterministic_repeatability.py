@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from app.harness.pipeline import run_workflow
+from app.harness.synthetic_fixture import patch_synthetic_ground_truth_initial_conditions
 from app.harness.types import WorkflowRunRequest
 
 _FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
@@ -30,7 +31,8 @@ def _run(stage_directory, run_id):
     return run_workflow(
         request,
         stage1_organism_id=None,
-        stage2_artifact_source=_FIXTURES / "synthetic_agent2_model.json",
+        stage1_synthetic_source=_FIXTURES / "synthetic_agent1_view.json",
+        stage2_postprocess=patch_synthetic_ground_truth_initial_conditions,
         stage4_request=stage4_request,
         stage5_request=stage5_request,
     )
@@ -78,16 +80,21 @@ def test_two_runs_produce_identical_experiment_rankings(two_runs):
 
 
 def test_two_runs_produce_byte_identical_stage2_artifact(two_runs):
-    """Stage 2's own artifact is a straight copy of a static fixture file with no per-run
-    identifier of any kind -- unlike every downstream stage's own report (each of which embeds
-    at least one fresh ``uuid.uuid4()``-based id every run, by design, per Agents 3-5's own
-    contracts -- including inside ``provenance_refs`` values, not only top-level id fields,
-    which makes a generic "strip every id field and compare the rest" check for those reports
-    more fragile than it is worth -- never a determinism defect), it genuinely must be
-    byte-identical (and therefore checksum-identical) across reruns. The substantive content
-    checks above (statuses, fitted parameter values, objective, rankings) are what actually
-    establish "the science is reproducible" for the stages that carry fresh ids; this check
-    adds the one stage where byte-identity itself is the correct, meaningful bar.
+    """**Five-Agent Workflow V1 Hardening increment:** Stage 2 is now a live, genuine invocation
+    of Agent 2's own canonical orchestration entrypoint (plus the one deterministic,
+    id-keyed-not-uuid-keyed harness-side initial-condition patch for this synthetic fixture) --
+    never a straight copy of a static fixture file. Agent 2's own pipeline embeds no fresh
+    ``uuid.uuid4()``-based id anywhere in its output (confirmed by
+    ``agent2-antimony-builder``'s own ``test_is_deterministic``), unlike every downstream
+    stage's own report (each of which embeds at least one fresh run-scoped id, by design, per
+    Agents 3-5's own contracts -- including inside ``provenance_refs`` values, not only
+    top-level id fields, which makes a generic "strip every id field and compare the rest" check
+    for those reports more fragile than it is worth -- never a determinism defect). Stage 2's
+    own output therefore still genuinely must be byte-identical (and therefore
+    checksum-identical) across reruns. The substantive content checks above (statuses, fitted
+    parameter values, objective, rankings) are what actually establish "the science is
+    reproducible" for the stages that carry fresh ids; this check adds the one stage where
+    byte-identity itself is the correct, meaningful bar.
     """
     report1, report2 = two_runs
     stage2_checksum_1 = report1.stages[1].output_checksum

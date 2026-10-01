@@ -3,10 +3,19 @@
 
 Usage: ``.venv/bin/python3 scripts/run_fixture_b.py [--run-id RUN_ID]``
 
-Agent 1 and Agent 2's own runtime are not invoked for this fixture (disclosed, deliberate scope
-decision -- see ``docs/01_orchestration_architecture.md``): the synthetic ground-truth model is
-supplied directly as a hand-authored ``agent2_model`` artifact, and Agent 3, Agent 4, and Agent
-5 are genuinely, live invoked against it.
+**Five-Agent Workflow V1 Hardening increment:** Agent 1's own runtime is still not invoked for
+this fixture (disclosed, deliberate scope decision -- no real literature exists for a
+hand-authored ground-truth system): a static, hand-authored Agent 1 view JSON
+(``synthetic_agent1_view.json``) is supplied directly as Stage 1's own output. Agent 2, however,
+is now genuinely, live invoked against it through its own real canonical orchestration
+entrypoint -- exactly like the real-yeast fixture -- never a hand-authored ``agent2_model``
+artifact. The one disclosed exception: Agent 2's own real pipeline does not yet populate species
+initial concentrations or compartment initial volume for any input (a pre-existing, documented
+scope gap -- see ``docs/01_orchestration_architecture.md``), so
+``app.harness.synthetic_fixture.patch_synthetic_ground_truth_initial_conditions`` patches those
+two fields onto Agent 2's own real output afterward, as a clearly-disclosed, minimal
+post-processing step. Every other field is Agent 2's own real, unmodified pipeline output. Agent
+3, Agent 4, and Agent 5 are genuinely, live invoked against it.
 """
 
 from __future__ import annotations
@@ -22,6 +31,9 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
 from app.harness.pipeline import run_workflow  # noqa: E402
+from app.harness.synthetic_fixture import (  # noqa: E402
+    patch_synthetic_ground_truth_initial_conditions,
+)
 from app.harness.types import WorkflowRunRequest  # noqa: E402
 
 FIXTURES_DIR = _REPO_ROOT / "tests" / "fixtures"
@@ -46,7 +58,8 @@ def main() -> int:
     report = run_workflow(
         request,
         stage1_organism_id=None,
-        stage2_artifact_source=FIXTURES_DIR / "synthetic_agent2_model.json",
+        stage1_synthetic_source=FIXTURES_DIR / "synthetic_agent1_view.json",
+        stage2_postprocess=patch_synthetic_ground_truth_initial_conditions,
         stage4_request=stage4_request,
         stage5_request=stage5_request,
     )

@@ -42,58 +42,65 @@ target agent's — which, since both are named `app`, would silently make one of
 unresolvable. A ~15-line generic serializer duplicated four times is harness plumbing, not
 agent logic, and is the correct trade-off here.
 
-## The one deliberate "consume an artifact" boundary: Agent 2
+## Agent 2's own canonical entrypoint: a genuine live invocation, for both fixtures
 
-The task's own instructions explicitly allow a stage to be satisfied by "invokes **or
-consumes** each agent's documented entrypoint/artifact." Agent 2's own real assembly pipeline
-is not a single function — it is a chain of at least eleven discrete stage functions
-(`translate_agent1_view_to_agent2` → `assemble_full_network` → optional enzyme-concentration/
-enzyme-state-dynamics resolution → `characterize_full_network` → `assign_kinetic_laws` →
-`declare_parameters` → `assess_boundaries` → `decompose_network` →
-`assemble_model_specification` → `generate_antimony`), confirmed this session to have **no
-existing, already-tested, single entrypoint or script** that chains them correctly end to end,
-and at least one intermediate step (reaction-context resolution) whose exact placement in that
-chain was not fully confirmed.
+**Five-Agent Workflow V1 Hardening increment.** Agent 2's own real assembly pipeline was, before
+this increment, a chain of at least eleven discrete stage functions
+(`translate_agent1_view_to_agent2` → `assemble_full_network` → reaction-context resolution →
+`characterize_full_network` → `assign_kinetic_laws` → `resolve_enzyme_concentrations` →
+`build_enzyme_state_dynamics` → a two-pass `declare_parameters`/`assess_boundaries`/
+`decompose_network` wiring → `assemble_model_specification` → `generate_antimony`) with no
+single, already-tested, official entrypoint chaining them correctly end to end — so the
+pre-hardening harness **consumed** a pre-existing, already-committed Agent 2 output artifact for
+Stage 2 rather than risk hand-chaining that sequence incorrectly.
 
-Hand-chaining an eleven-stage, partially-uncertain internal pipeline blind, with no way to
-verify the result against a known-good reference, is exactly the risk the harness's own central
-rule exists to prevent: it would mean the harness silently re-implementing (and potentially
-mis-implementing) Agent 2's own orchestration logic, rather than simply invoking or consuming
-it. The harness therefore **consumes** Agent 2's own already-real, already-committed output
-artifact for the `sce00061` network (the same artifact the sibling Agent 3/4/5 repositories
-already built their own real test fixtures from) as the Stage 2 result, rather than
-live-invoking Agent 2's own runtime — disclosed here, in every stage result's own `warnings`
-field for this specific run, and in the completion report. Stage 2 is still fully validated:
-the harness parses it, checks its own declared `contract_version`, and computes its checksum,
-exactly like every other stage's output.
+Agent 2's own `agent2-antimony-builder` repository now commits exactly that entrypoint:
+`app.agent2.pipeline.run_agent2_pipeline` (CLI: `scripts/run_agent2_pipeline.py`; see that
+repository's own `docs/19_canonical_orchestration_entrypoint.md` for the full stage-by-stage
+evidence trail). `app/harness/runners/run_agent2.py` is now a thin wrapper around that one real
+function. Stage 2 is therefore a genuine, live subprocess invocation of Agent 2's own real
+pipeline **for both fixtures**, fed directly from whatever Stage 1 produced — never a copy of a
+pre-existing artifact, and never a hand-authored `agent2_model` dict. This resolves the
+pre-hardening "consume, don't invoke" scope limitation entirely.
 
-## The contract-version re-stamping adapters
+## The contract-version re-stamping adapters — removed
 
-A related, smaller finding from the same investigation: Agent 3, Agent 4, and Agent 5 each
-independently declared their own name for what is, today, structurally the identical
-`agent2_model` artifact shape (`"agent2-to-agent3-v1"`, `"agent2-agent3-to-agent4-v1"`,
-`"agent2-agent4-to-agent5-v1"` respectively) — there is no single canonical version string the
-one real artifact Agent 2 actually produces can simultaneously satisfy for all three consumers,
-because no producer-side function in Agent 2 currently stamps a consumer-specific version.
-Neither Agent 4's nor Agent 5's own handoff code actually enforces this field today (both are
-documented Version 1 no-op placeholders in their own source). `app.harness.adapters` re-stamps
-`agent2_model.contract_version` to the exact value each specific downstream consumer documents
-as its own expectation when building that consumer's input artifact — never touching any other
-field (every species, reaction, parameter, kinetic law, and model assumption is passed through
-completely unmodified) — see `docs/02_contract_version_matrix.md` for the full detail and the
-docstring on `app.harness.adapters._restamp_contract_version` for the complete rationale.
+A related, smaller pre-hardening finding: Agent 3, Agent 4, and Agent 5 each independently
+declared their own name for what was already, structurally, the identical `agent2_model`
+artifact shape (`"agent2-to-agent3-v1"`, `"agent2-agent3-to-agent4-v1"`,
+`"agent2-agent4-to-agent5-v1"` respectively). **Five-Agent Workflow V1 Hardening increment:**
+Agent 2's own `app.agent2.pipeline` now emits exactly one canonical contract version,
+`AGENT2_DOWNSTREAM_CONTRACT_VERSION = "agent2-downstream-v1"`, and Agents 3, 4, and 5 have all
+been migrated to expect that identical string. `app.harness.adapters` no longer re-stamps
+anything — `_restamp_contract_version` has been removed entirely, and `build_agent4_handoff`/
+`build_agent5_handoff` now wrap `agent2_model` exactly as Stage 2 produced it, byte-for-byte. See
+`docs/02_contract_version_matrix.md` for the resolved matrix, and
+`app.harness.invariants.check_no_contract_version_restamping` for the new end-to-end check that
+this never silently regresses.
 
 ## Fixture B's own, separately disclosed scope decision
 
-For the fully synthetic fixture, Agent 1's own runtime is not invoked either (no real
-literature exists to curate for a hand-authored ground-truth system), and Agent 2's real
-assembly pipeline is not invoked for the same reason the real-fixture case above avoids
-hand-chaining it blind — doing so for entirely novel, synthetic input would be strictly riskier
-than for the real case, where at least a known-good reference artifact exists to fall back on.
-Fixture B's own ground-truth model is supplied directly as a hand-authored `agent2_model`
-artifact (`tests/fixtures/synthetic_agent2_model.json`), and Agent 3, Agent 4, and Agent 5 are
-genuinely, live invoked against it — exercising real calibration, real validation, and real
-experimental-design ranking against a model whose true parameters are known by construction.
+Agent 1's own runtime is still not invoked for the fully synthetic fixture (no real literature
+exists to curate for a hand-authored ground-truth system): a static, hand-authored Agent 1 view
+JSON (`tests/fixtures/synthetic_agent1_view.json`) is supplied directly as Stage 1's own output.
+Agent 2, however, is now genuinely, live invoked against it through the same canonical entrypoint
+as the real-yeast fixture — never a hand-authored `agent2_model` artifact.
+
+The one remaining disclosed exception: no increment of Agent 2's own pipeline yet populates
+species initial concentrations or compartment initial volume for *any* input (confirmed a
+genuine, pre-existing, upstream scope gap — also present on the real `sce00061` model, which is
+exactly why Fixture A's own Agent 3 stage reports `STEADY_STATE_NOT_FOUND`). Fixture B exists to
+exercise calibration/validation/experimental-design logic against a *known* ground truth, which
+requires the model to actually simulate from the intended starting state, so
+`app.harness.synthetic_fixture.patch_synthetic_ground_truth_initial_conditions` applies one
+minimal, clearly-disclosed post-processing step to Agent 2's own real output afterward — setting
+only `species[].initial_concentration`/`initialization_source`,
+`compartments[].initial_volume`/`volume_unit`/`constant`, and the matching Antimony initial-value
+assignments. Every other field (species/reactions/kinetic_laws/parameters/model structure) is
+Agent 2's own real, completely unmodified pipeline output. Agent 3, Agent 4, and Agent 5 are then
+genuinely, live invoked against the patched artifact — exercising real calibration, real
+validation, and real experimental-design ranking against a model whose true parameters are known
+by construction.
 
 ## Every stage's own artifact is written before the next stage runs
 

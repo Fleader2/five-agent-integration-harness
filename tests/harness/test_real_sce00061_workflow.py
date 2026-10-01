@@ -3,7 +3,15 @@
 Requires the live Agent 1 Postgres database (the same one every real fixture in this project's
 history has used) to be reachable -- skipped, never failed, if it is not.
 
-The full five-stage run is genuinely expensive (a live database query plus four real agent
+**Five-Agent Workflow V1 Hardening increment:** Stage 2 (Agent 2) is now a genuine, live
+subprocess invocation of Agent 2's own canonical orchestration entrypoint against this exact
+run's own freshly-curated Agent 1 output -- never a copy of a pre-existing, already-committed
+Agent 2 artifact. The real sce00061 model's own richer parameter count (115, not the pre-
+hardening partial pipeline's 109) is a direct, expected consequence of this fixture now
+exercising Agent 2's full canonical pipeline (reaction-context resolution and enzyme-
+concentration/enzyme-state-dynamics stages the pre-hardening harness never ran).
+
+The full five-stage run is genuinely expensive (a live database query plus five real agent
 subprocess invocations) -- run **once** per test session via a module-scoped fixture, and every
 test below only asserts against that one shared result, rather than each re-running the whole
 workflow independently.
@@ -58,7 +66,6 @@ def real_workflow_report(tmp_path_factory):
     return run_workflow(
         request,
         stage1_organism_id=_REAL_ORGANISM_ID,
-        stage2_artifact_source=_FIXTURES / "sce00061_agent2_model.json",
         stage4_request=stage4_request,
         stage5_request=stage5_request,
     )
@@ -81,15 +88,10 @@ def test_real_workflow_agent2_reports_executable(real_workflow_report):
     agent2_stage = real_workflow_report.stages[1]
     findings = dict(f.split("=") for f in agent2_stage.findings_summary)
     assert findings["readiness"] == "EXECUTABLE"
-
-
-def test_real_workflow_agent1_to_agent2_translate_check_passes(real_workflow_report):
-    """Beyond the static contract-version comparison, a genuine live check: Agent 2's own real
-    ``translate_agent1_view_to_agent2`` entrypoint actually accepts the freshly-curated Agent 1
-    view this exact run produced."""
-    agent2_stage = real_workflow_report.stages[1]
-    findings = dict(f.split("=") for f in agent2_stage.findings_summary)
-    assert findings["agent1_to_agent2_translate_ok"] == "True"
+    assert int(findings["species"]) == 53
+    assert int(findings["reactions"]) == 38
+    assert int(findings["parameters"]) == 115
+    assert agent2_stage.elapsed_seconds is not None
 
 
 def test_real_workflow_agent3_diagnoses_real_model(real_workflow_report):

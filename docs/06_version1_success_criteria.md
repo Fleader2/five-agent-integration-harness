@@ -24,9 +24,9 @@ This fixture is considered **fully successful** when, and only when:
 
 - Agent 1 genuinely, live curates the real yeast fatty-acid-biosynthesis data (38 reactions, 216
   kinetic measurements) — not a cached/fabricated stand-in.
-- Agent 2's own already-real output artifact for this exact network parses successfully and
-  reports `readiness=EXECUTABLE`, and the live `translate_agent1_view_to_agent2` boundary check
-  against the freshly-curated Agent 1 view passes.
+- Agent 2's own canonical orchestration entrypoint, genuinely, live invoked against that fresh
+  Agent 1 output, reports `readiness=EXECUTABLE` with 53 species, 38 reactions, and 115
+  parameters.
 - Agent 3 genuinely, live simulates/diagnoses the model, producing its own real findings
   (including the real, reproducible `STEADY_STATE_NOT_FOUND` result this specific model is known
   to produce, given its own missing initial conditions).
@@ -48,18 +48,20 @@ regardless of what `overall_status` a bug might otherwise produce.
 
 This fixture is considered **fully successful** when, and only when:
 
-- The hand-authored, known-ground-truth network (`S1 -> S2 -> S3 -> S4`, true rates `k1=0.5`,
-  `k2=0.2`, `k3=0.1`) is genuinely, live simulated by Agent 3.
-- Agent 4 genuinely, live recovers `k1` and `k2` to within a small fraction of their true values
-  from supplied synthetic training observations that structurally constrain them — **and**
-  correctly flags `k3` (deliberately unconstrained by that same training data) with a real
-  `LOW_SENSITIVITY` identifiability finding, rather than reporting a falsely-confident point
-  estimate for it.
+- The known-ground-truth network (`S1 -> S2 -> S3 -> S4`, true rate constants `0.5`, `0.2`,
+  `0.1`) is genuinely, live assembled by Agent 2's own canonical entrypoint (plus the one
+  disclosed initial-condition patch — see `docs/01_orchestration_architecture.md`) and genuinely,
+  live simulated by Agent 3.
+- Agent 4 genuinely, live recovers the first two rate constants to within a small fraction of
+  their true values from supplied synthetic training observations that structurally constrain
+  them — **and** correctly flags the third (deliberately unconstrained by that same training
+  data) with a real `LOW_SENSITIVITY` identifiability finding, rather than reporting a
+  falsely-confident point estimate for it.
 - Agent 5 genuinely, live validates the calibrated model against held-out synthetic
   observations, reports acceptable generalization (no spurious overfit warning), and **ranks the
   known-informative candidate experiment (measuring the otherwise-unobserved `S4`, the species
-  most sensitive to the poorly-identified `k3`) at or near the top of its own scored
-  recommendations** — confirmed, in this repository's own run, to land at rank 0.
+  most sensitive to the poorly-identified third rate constant) at or near the top of its own
+  scored recommendations** — confirmed, in this repository's own run, to land at rank 0.
 - Every end-to-end invariant check passes, identically to Fixture A's own list.
 
 Because this fixture's own ground truth is known by construction, a wrong parameter recovery, a
@@ -69,8 +71,12 @@ the way Fixture A's data gaps are.
 
 ## What Version 1 completion does NOT claim
 
-- It does not claim Agent 2's full internal assembly pipeline has been verified end to end live
-  (a disclosed, documented scope limitation — see `docs/01_orchestration_architecture.md`).
+- It does not claim Agent 2's own pipeline populates species initial concentrations or
+  compartment initial volume for any input — a disclosed, documented, pre-existing upstream
+  scope gap this hardening increment did not attempt to close (see `docs/
+  01_orchestration_architecture.md`); Fixture B's own patch step exists specifically because of
+  this gap, and Fixture A's own `STEADY_STATE_NOT_FOUND` result is this same gap showing up
+  honestly on real data.
 - It does not claim the real `sce00061` model is scientifically validated, or even that it is
   ready for real calibration — only that the workflow chain around it is.
 - It does not claim full Bayesian/joint-optimal experimental design (Agent 5's own scoring

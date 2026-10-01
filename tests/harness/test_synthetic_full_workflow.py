@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from app.harness.pipeline import run_workflow
+from app.harness.synthetic_fixture import patch_synthetic_ground_truth_initial_conditions
 from app.harness.types import WorkflowRunRequest, WorkflowStatus
 
 _FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
@@ -33,7 +34,8 @@ def synthetic_workflow_report(tmp_path_factory):
     return run_workflow(
         request,
         stage1_organism_id=None,
-        stage2_artifact_source=_FIXTURES / "synthetic_agent2_model.json",
+        stage1_synthetic_source=_FIXTURES / "synthetic_agent1_view.json",
+        stage2_postprocess=patch_synthetic_ground_truth_initial_conditions,
         stage4_request=stage4_request,
         stage5_request=stage5_request,
     )
@@ -55,7 +57,7 @@ def test_synthetic_workflow_completes_successfully(synthetic_workflow_report):
 
 
 def test_synthetic_workflow_all_invariants_pass(synthetic_workflow_report):
-    assert len(synthetic_workflow_report.invariant_checks) == 6
+    assert len(synthetic_workflow_report.invariant_checks) == 8
     assert all(c.passed for c in synthetic_workflow_report.invariant_checks)
 
 
@@ -68,12 +70,17 @@ def test_synthetic_workflow_recovers_known_parameters(
     estimates = {
         e["target_id"]: e["fitted_value"] for e in stage4["calibration"]["parameter_estimates"]
     }
-    assert estimates["k1"] == pytest.approx(synthetic_manifest["true_parameters"]["k1"], rel=0.05)
-    assert estimates["k2"] == pytest.approx(synthetic_manifest["true_parameters"]["k2"], rel=0.05)
-    # k3 is intentionally NOT recoverable from this training set (never observes downstream of
-    # S2) -- confirmed flagged, never silently reported as a good fit.
+    true_params = synthetic_manifest["true_parameters"]
+    assert estimates["k_reaction-1_protein-1"] == pytest.approx(
+        true_params["k_reaction-1_protein-1"], rel=0.05
+    )
+    assert estimates["k_reaction-2_protein-2"] == pytest.approx(
+        true_params["k_reaction-2_protein-2"], rel=0.05
+    )
+    # k_reaction-3_protein-3 is intentionally NOT recoverable from this training set (never
+    # observes downstream of S2) -- confirmed flagged, never silently reported as a good fit.
     identifiability = stage4["calibration"]["identifiability_findings"]
-    assert any(f["finding_id"] == "low-sensitivity:k3" for f in identifiability)
+    assert any(f["finding_id"] == "low-sensitivity:k_reaction-3_protein-3" for f in identifiability)
 
 
 def test_synthetic_workflow_validates_well_for_identified_parameters(synthetic_workflow_report):
@@ -93,15 +100,12 @@ def test_synthetic_workflow_ranks_the_known_informative_experiment_top(synthetic
     with open(stage5_path) as f:
         stage5 = json.load(f)
     scores_by_id = {s["experiment_id"]: s for s in stage5["experiment_scores"]}
-    # Measuring S3 or S4 is the only way to inform the poorly-identified k3 -- either should
-    # rank at or near the very top, strictly above every passive measurement of the already-
-    # well-identified S1/S2.
-    top_rank = min(
-        scores_by_id["measure-concentration:S3"]["rank"],
-        scores_by_id["measure-concentration:S4"]["rank"],
-    )
+    s3_id = "measure-concentration:compound-S3::in::compartment-1"
+    s4_id = "measure-concentration:compound-S4::in::compartment-1"
+    s1_id = "measure-concentration:compound-S1::in::compartment-1"
+    # Measuring S3 or S4 is the only way to inform the poorly-identified k_reaction-3_protein-3
+    # -- either should rank at or near the very top, strictly above every passive measurement of
+    # the already-well-identified S1/S2.
+    top_rank = min(scores_by_id[s3_id]["rank"], scores_by_id[s4_id]["rank"])
     assert top_rank <= 1
-    assert (
-        scores_by_id["measure-concentration:S3"]["information_score"]
-        > scores_by_id["measure-concentration:S1"]["information_score"]
-    )
+    assert scores_by_id[s3_id]["information_score"] > scores_by_id[s1_id]["information_score"]

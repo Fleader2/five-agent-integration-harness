@@ -1,8 +1,8 @@
 {
   "true_parameters": {
-    "k1": 0.5,
-    "k2": 0.2,
-    "k3": 0.1
+    "k_reaction-1_protein-1": 0.5,
+    "k_reaction-2_protein-2": 0.2,
+    "k_reaction-3_protein-3": 0.1
   },
-  "notes": "k3 is intentionally poorly identified by the training set (which never observes S4)."
+  "notes": "k_reaction-3_protein-3 is intentionally poorly identified by the training set (which never observes compound-S4::in::compartment-1)."
 }

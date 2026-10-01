@@ -1,0 +1,118 @@
+{
+  "contract_version": "1.5",
+  "organism_id": "synthetic-ground-truth-organism",
+  "compartments": [
+    {
+      "id": "compartment-1",
+      "name": "cyto"
+    }
+  ],
+  "compounds": [
+    {
+      "id": "compound-S1",
+      "canonical_name": "S1"
+    },
+    {
+      "id": "compound-S2",
+      "canonical_name": "S2"
+    },
+    {
+      "id": "compound-S3",
+      "canonical_name": "S3"
+    },
+    {
+      "id": "compound-S4",
+      "canonical_name": "S4"
+    }
+  ],
+  "reactions": [
+    {
+      "id": "reaction-1",
+      "name": "S1_to_S2",
+      "reversible": true
+    },
+    {
+      "id": "reaction-2",
+      "name": "S2_to_S3",
+      "reversible": true
+    },
+    {
+      "id": "reaction-3",
+      "name": "S3_to_S4",
+      "reversible": true
+    }
+  ],
+  "reaction_participants": [
+    {
+      "reaction_id": "reaction-1",
+      "compound_id": "compound-S1",
+      "role": "REACTANT",
+      "stoichiometry": "1",
+      "compartment_id": "compartment-1"
+    },
+    {
+      "reaction_id": "reaction-1",
+      "compound_id": "compound-S2",
+      "role": "PRODUCT",
+      "stoichiometry": "1",
+      "compartment_id": "compartment-1"
+    },
+    {
+      "reaction_id": "reaction-2",
+      "compound_id": "compound-S2",
+      "role": "REACTANT",
+      "stoichiometry": "1",
+      "compartment_id": "compartment-1"
+    },
+    {
+      "reaction_id": "reaction-2",
+      "compound_id": "compound-S3",
+      "role": "PRODUCT",
+      "stoichiometry": "1",
+      "compartment_id": "compartment-1"
+    },
+    {
+      "reaction_id": "reaction-3",
+      "compound_id": "compound-S3",
+      "role": "REACTANT",
+      "stoichiometry": "1",
+      "compartment_id": "compartment-1"
+    },
+    {
+      "reaction_id": "reaction-3",
+      "compound_id": "compound-S4",
+      "role": "PRODUCT",
+      "stoichiometry": "1",
+      "compartment_id": "compartment-1"
+    }
+  ],
+  "reaction_enzyme_associations": [
+    {
+      "reaction_id": "reaction-1",
+      "protein_id": "protein-1",
+      "relationship": "CATALYZES"
+    },
+    {
+      "reaction_id": "reaction-2",
+      "protein_id": "protein-2",
+      "relationship": "CATALYZES"
+    },
+    {
+      "reaction_id": "reaction-3",
+      "protein_id": "protein-3",
+      "relationship": "CATALYZES"
+    }
+  ],
+  "regulatory_interactions": [],
+  "kinetic_measurements": [],
+  "enzyme_states": [],
+  "enzyme_modifications": [],
+  "allosteric_interactions": [],
+  "enzyme_state_transitions": [],
+  "experimental_contexts": [],
+  "quantitative_observations": [],
+  "publications": [],
+  "claims": [],
+  "evidence": [],
+  "confidence_summaries": []
+}

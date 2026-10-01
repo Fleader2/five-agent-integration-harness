@@ -1,28 +1,14 @@
 #!/usr/bin/env python3
-"""Stage runner for the Agent 1 -> Agent 2 boundary -- executed with Agent 2's own venv
-interpreter, with ``cwd``/``PYTHONPATH`` set to Agent 2's own repository root.
+"""Stage runner for Agent 2 -- executed with Agent 2's own venv interpreter, with
+``cwd``/``PYTHONPATH`` set to Agent 2's own repository root.
 
-Usage: ``run_agent2.py --input <agent1_view.json> --output <translate_check_result.json>``
+Usage: ``run_agent2.py --input <agent1_view.json> --output <agent2_model.json>``
 
-**Disclosed scope limitation** (see ``docs/01_orchestration_architecture.md`` §"The Agent 2
-stage" and the completion report's own "remaining integration gaps" section): Agent 2's real
-assembly pipeline is not one documented top-level entrypoint -- it is an internal, 11-plus-stage
-composition (translate -> assemble_full_network -> resolve_enzyme_concentrations ->
-build_enzyme_state_dynamics -> characterize_full_network -> assign_kinetic_laws ->
-declare_parameters -> assess_boundaries -> decompose_network -> assemble_model_specification ->
-generate_antimony, plus a reaction-context-resolution step whose exact position in that chain
-was not independently confirmed). Hand-chaining all of this inside a harness runner script,
-without an existing verified reference to copy, would risk the harness itself silently
-re-implementing (and potentially mis-implementing) Agent 2's own internal logic -- exactly what
-this harness's central rule forbids ("it does not duplicate agent logic").
-
-This runner therefore exercises only the one cheap, safe, single-function, already-documented
-piece of that boundary that IS a real top-level entrypoint:
-``translate_agent1_view_to_agent2`` -- proving the *shape* of a given Agent 1 view is one Agent
-2's own real contract parser accepts, without attempting the fragile multi-stage chain beyond
-it. The harness's own Stage 2 *output artifact* for a given fixture is a separately-provided,
-already-real, already-committed ``agent2_model`` JSON (see ``app.harness.pipeline`` for exactly
-which file, and why), never a value this runner invents or silently repairs.
+**Five-Agent Workflow V1 Hardening increment**: this is now a thin wrapper around Agent 2's own
+canonical, official orchestration entrypoint, ``app.agent2.pipeline.run_agent2_pipeline`` --
+the same function ``agent2-antimony-builder/scripts/run_agent2_pipeline.py`` wraps for direct
+command-line use. The harness never duplicates Agent 2's own stage-sequencing logic; it only
+invokes the one already-committed function that does.
 """
 
 from __future__ import annotations
@@ -37,32 +23,21 @@ def main() -> int:
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
-    from app.agent2.handoff.translate import translate_agent1_view_to_agent2
+    from app.agent2.pipeline import run_agent2_pipeline
 
     with open(args.input) as f:
-        view_data = json.load(f)
+        agent1_view = json.load(f)
 
-    try:
-        contract = translate_agent1_view_to_agent2(view_data)
-        result = {
-            "translated": True,
-            "contract_version": contract.contract_version,
-            "reaction_count": len(contract.reactions),
-            "message": None,
-        }
-    except Exception as exc:
-        result = {
-            "translated": False,
-            "contract_version": None,
-            "reaction_count": None,
-            "message": f"{type(exc).__name__}: {exc}",
-        }
+    result = run_agent2_pipeline(agent1_view)
 
     with open(args.output, "w") as f:
-        json.dump(result, f, indent=2)
+        json.dump(result.downstream_handoff, f, indent=2)
 
-    print(f"agent2_translate_ok={result['translated']}")
-    print(f"agent2_contract_version={result['contract_version']}")
+    print(f"agent2_contract_version={result.downstream_handoff['contract_version']}")
+    print(f"agent2_readiness={result.downstream_handoff['readiness']}")
+    print(f"agent2_species_count={len(result.downstream_handoff['species'])}")
+    print(f"agent2_reaction_count={len(result.downstream_handoff['reactions'])}")
+    print(f"agent2_parameter_count={len(result.downstream_handoff['parameters'])}")
     return 0
 
 

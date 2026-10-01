@@ -3,7 +3,7 @@
   "targets": [
     {
       "target_kind": "PARAMETER",
-      "target_id": "k1",
+      "target_id": "k_reaction-1_protein-1",
       "bounds": {
         "lower": 0.001,
         "upper": 5.0
@@ -11,7 +11,7 @@
     },
     {
       "target_kind": "PARAMETER",
-      "target_id": "k2",
+      "target_id": "k_reaction-2_protein-2",
       "bounds": {
         "lower": 0.001,
         "upper": 5.0
@@ -19,7 +19,7 @@
     },
     {
       "target_kind": "PARAMETER",
-      "target_id": "k3",
+      "target_id": "k_reaction-3_protein-3",
       "bounds": {
         "lower": 0.001,
         "upper": 5.0
@@ -31,7 +31,7 @@
     "observations": [
       {
         "observation_id": "obs-S1",
-        "target_species_id": "S1",
+        "target_species_id": "compound-S1::in::compartment-1",
         "kind": "TIME_SERIES",
         "time_points": [
           1.0,
@@ -61,7 +61,7 @@
       },
       {
         "observation_id": "obs-S2",
-        "target_species_id": "S2",
+        "target_species_id": "compound-S2::in::compartment-1",
         "kind": "TIME_SERIES",
         "time_points": [
           1.0,

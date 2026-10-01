@@ -9,7 +9,17 @@ data gap.
 
 from __future__ import annotations
 
+import json
+
+from app.harness.checksums import sha256_of_text
 from app.harness.types import InvariantCheckResult
+
+
+def _canonical_checksum(agent2_model: dict) -> str:
+    """A key-order-independent checksum of an ``agent2_model`` dict -- two dicts with the same
+    content but different key insertion order must compare equal here, since "the same
+    artifact" is a content question, never a serialization-order question."""
+    return sha256_of_text(json.dumps(agent2_model, sort_keys=True))
 
 
 def _entity_ids(agent2_model: dict) -> set[str]:
@@ -162,6 +172,78 @@ def check_validation_never_feeds_back(
     )
 
 
+def check_agent2_artifact_checksum_consistent(
+    stage2_output: dict,
+    stage4_input_agent2_model: dict | None,
+    stage5_input_agent2_model: dict | None,
+) -> InvariantCheckResult:
+    """**Five-Agent Workflow V1 Hardening invariant.** The one Agent 2 downstream artifact
+    Stage 3 consumes directly, and the ``agent2_model`` embedded in Stage 4's and Stage 5's own
+    input handoffs, must all be the *same* artifact -- never a divergent copy. Compared by a
+    content checksum (``sort_keys=True``), not Python object identity or raw byte order, since
+    a key-order difference introduced by serialization is not a real content difference."""
+    canonical = _canonical_checksum(stage2_output)
+    mismatches: list[str] = []
+    if stage4_input_agent2_model is not None:
+        c4 = _canonical_checksum(stage4_input_agent2_model)
+        if c4 != canonical:
+            mismatches.append(f"stage4 input agent2_model checksum {c4} != {canonical}")
+    if stage5_input_agent2_model is not None:
+        c5 = _canonical_checksum(stage5_input_agent2_model)
+        if c5 != canonical:
+            mismatches.append(f"stage5 input agent2_model checksum {c5} != {canonical}")
+    passed = not mismatches
+    return InvariantCheckResult(
+        check_id="agent2-artifact-checksum-consistent",
+        passed=passed,
+        description=(
+            "The canonical (sort_keys) checksum of the one Agent 2 downstream artifact is "
+            "identical across every downstream stage that consumes it -- Stage 3's own direct "
+            "input, and the agent2_model embedded in Stage 4's and Stage 5's own input "
+            "handoffs."
+        ),
+        details=f"checksum={canonical}" if passed else "; ".join(mismatches),
+    )
+
+
+def check_no_contract_version_restamping(
+    stage2_output: dict,
+    stage4_input_agent2_model: dict | None,
+    stage5_input_agent2_model: dict | None,
+) -> InvariantCheckResult:
+    """**Five-Agent Workflow V1 Hardening invariant.** Agent 2's own declared
+    ``contract_version`` is never rewritten anywhere downstream -- the harness performs no
+    re-stamping at any boundary (the pre-hardening ``_restamp_contract_version`` workaround has
+    been removed entirely; ``app.harness.adapters`` now only wraps ``agent2_model``, never
+    copies or edits it)."""
+    canonical_version = stage2_output.get("contract_version")
+    mismatches: list[str] = []
+    if stage4_input_agent2_model is not None:
+        v4 = stage4_input_agent2_model.get("contract_version")
+        if v4 != canonical_version:
+            mismatches.append(
+                f"stage4 agent2_model.contract_version={v4!r} != {canonical_version!r}"
+            )
+    if stage5_input_agent2_model is not None:
+        v5 = stage5_input_agent2_model.get("contract_version")
+        if v5 != canonical_version:
+            mismatches.append(
+                f"stage5 agent2_model.contract_version={v5!r} != {canonical_version!r}"
+            )
+    passed = not mismatches
+    return InvariantCheckResult(
+        check_id="no-contract-version-restamping",
+        passed=passed,
+        description=(
+            "Agent 2's own declared contract_version is never rewritten anywhere downstream -- "
+            "the harness performs no re-stamping at any boundary."
+        ),
+        details=f"contract_version={canonical_version!r} throughout."
+        if passed
+        else "; ".join(mismatches),
+    )
+
+
 def run_invariant_checks(
     *,
     stage2_output: dict,
@@ -169,6 +251,7 @@ def run_invariant_checks(
     stage4_output: dict | None,
     stage5_input_agent2_model: dict | None,
     stage5_input_agent4_report: dict | None,
+    stage4_input_agent2_model: dict | None = None,
 ) -> tuple[InvariantCheckResult, ...]:
     """The full Version 1 end-to-end invariant sweep, in a fixed, deterministic order."""
     return (
@@ -178,14 +261,22 @@ def run_invariant_checks(
         check_evidence_provenance_survives(stage2_output, stage4_output),
         check_no_mutation_of_agent2_model(stage2_output, stage5_input_agent2_model),
         check_validation_never_feeds_back(stage4_output, stage5_input_agent4_report),
+        check_agent2_artifact_checksum_consistent(
+            stage2_output, stage4_input_agent2_model, stage5_input_agent2_model
+        ),
+        check_no_contract_version_restamping(
+            stage2_output, stage4_input_agent2_model, stage5_input_agent2_model
+        ),
     )
 
 
 __all__ = [
+    "check_agent2_artifact_checksum_consistent",
     "check_calibrated_values_distinguishable",
     "check_evidence_provenance_survives",
     "check_fixed_parameters_never_calibrated",
     "check_identifier_traceability",
+    "check_no_contract_version_restamping",
     "check_no_mutation_of_agent2_model",
     "check_validation_never_feeds_back",
     "run_invariant_checks",

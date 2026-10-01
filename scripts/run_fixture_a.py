@@ -44,7 +44,6 @@ def main() -> int:
     report = run_workflow(
         request,
         stage1_organism_id=REAL_ORGANISM_ID,
-        stage2_artifact_source=FIXTURES_DIR / "sce00061_agent2_model.json",
         stage4_request=stage4_request,
         stage5_request=stage5_request,
     )

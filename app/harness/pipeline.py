@@ -7,6 +7,13 @@ directory before the next stage is ever invoked. A producing stage's own declare
 version is checked against what the consuming stage's own code expects *before* that consuming
 stage runs -- a mismatch stops the run immediately (``WorkflowStatus.CONTRACT_MISMATCH``),
 never silently proceeding against a shape the downstream agent was not built to expect.
+
+**Five-Agent Workflow V1 Hardening increment**: Stage 2 (Agent 2) is now **always** a genuine,
+live subprocess invocation of Agent 2's own canonical orchestration entrypoint
+(``app.agent2.pipeline.run_agent2_pipeline``, via ``runners/run_agent2.py``) for both canonical
+fixtures -- never a copy of a pre-existing artifact. ``app.harness.adapters`` no longer
+re-stamps any field; the ``agent2_model`` dict every downstream stage receives is the exact same
+object Stage 2 itself produced.
 """
 
 from __future__ import annotations
@@ -15,6 +22,7 @@ import json
 import shutil
 import time
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 from app.harness import repo_paths
@@ -83,6 +91,59 @@ def _contract_mismatch_result(
     )
 
 
+def _agent_stage_failed_result(
+    stage_name: str,
+    agent_label: str,
+    outcome,
+    input_path: Path | None,
+) -> WorkflowStageResult:
+    return WorkflowStageResult(
+        stage_name=stage_name,
+        agent_label=agent_label,
+        agent_package_version=None,
+        declared_contract_version=None,
+        expected_contract_version=None,
+        input_artifact_path=str(input_path) if input_path else None,
+        output_artifact_path=None,
+        input_checksum=sha256_of_file(input_path) if input_path and input_path.is_file() else None,
+        output_checksum=None,
+        status=WorkflowStatus.AGENT_STAGE_FAILED,
+        warnings=(),
+        findings_summary=(),
+        elapsed_seconds=outcome.elapsed_seconds,
+        message=(
+            f"{agent_label} stage exited with code {outcome.returncode}.\n"
+            f"stdout:\n{outcome.stdout}\nstderr:\n{outcome.stderr}"
+        ),
+    )
+
+
+def _invalid_json_result(
+    stage_name: str,
+    agent_label: str,
+    outcome,
+    input_path: Path | None,
+    output_path: Path,
+    exc: Exception,
+) -> WorkflowStageResult:
+    return WorkflowStageResult(
+        stage_name=stage_name,
+        agent_label=agent_label,
+        agent_package_version=None,
+        declared_contract_version=None,
+        expected_contract_version=None,
+        input_artifact_path=str(input_path) if input_path else None,
+        output_artifact_path=str(output_path),
+        input_checksum=sha256_of_file(input_path) if input_path and input_path.is_file() else None,
+        output_checksum=None,
+        status=WorkflowStatus.INVALID_ARTIFACT,
+        warnings=(),
+        findings_summary=(),
+        elapsed_seconds=outcome.elapsed_seconds,
+        message=f"Output artifact could not be parsed as JSON: {exc}",
+    )
+
+
 def _run_subprocess_stage(
     *,
     stage_name: str,
@@ -106,50 +167,13 @@ def _run_subprocess_stage(
     )
 
     if outcome.returncode != 0 or not output_path.is_file():
-        return WorkflowStageResult(
-            stage_name=stage_name,
-            agent_label=agent_label,
-            agent_package_version=None,
-            declared_contract_version=None,
-            expected_contract_version=None,
-            input_artifact_path=str(input_path) if input_path else None,
-            output_artifact_path=None,
-            input_checksum=sha256_of_file(input_path)
-            if input_path and input_path.is_file()
-            else None,
-            output_checksum=None,
-            status=WorkflowStatus.AGENT_STAGE_FAILED,
-            warnings=(),
-            findings_summary=(),
-            elapsed_seconds=outcome.elapsed_seconds,
-            message=(
-                f"{agent_label} stage exited with code {outcome.returncode}.\n"
-                f"stdout:\n{outcome.stdout}\nstderr:\n{outcome.stderr}"
-            ),
-        )
+        return _agent_stage_failed_result(stage_name, agent_label, outcome, input_path)
 
     try:
         with open(output_path) as f:
             output_data = json.load(f)
     except (json.JSONDecodeError, OSError) as exc:
-        return WorkflowStageResult(
-            stage_name=stage_name,
-            agent_label=agent_label,
-            agent_package_version=None,
-            declared_contract_version=None,
-            expected_contract_version=None,
-            input_artifact_path=str(input_path) if input_path else None,
-            output_artifact_path=str(output_path),
-            input_checksum=sha256_of_file(input_path)
-            if input_path and input_path.is_file()
-            else None,
-            output_checksum=None,
-            status=WorkflowStatus.INVALID_ARTIFACT,
-            warnings=(),
-            findings_summary=(),
-            elapsed_seconds=outcome.elapsed_seconds,
-            message=f"Output artifact could not be parsed as JSON: {exc}",
-        )
+        return _invalid_json_result(stage_name, agent_label, outcome, input_path, output_path, exc)
 
     status, findings = findings_extractor(output_data)
     return WorkflowStageResult(
@@ -174,6 +198,16 @@ def _run_subprocess_stage(
 #: outcome (e.g. a steady state could not be found given missing initial conditions) --
 #: never a stage failure, and never silently reported as a clean ``SUCCESS`` either.
 _AGENT3_EXPECTED_DATA_GAP_STATUSES = frozenset({"STEADY_STATE_NOT_FOUND"})
+
+
+def _agent2_findings(data: dict) -> tuple[WorkflowStatus, tuple[str, ...]]:
+    findings = (
+        f"species={len(data.get('species', []))}",
+        f"reactions={len(data.get('reactions', []))}",
+        f"parameters={len(data.get('parameters', []))}",
+        f"readiness={data.get('readiness')}",
+    )
+    return WorkflowStatus.SUCCESS, findings
 
 
 def _agent3_findings(data: dict) -> tuple[WorkflowStatus, tuple[str, ...]]:
@@ -216,23 +250,38 @@ def run_workflow(
     request: WorkflowRunRequest,
     *,
     stage1_organism_id: str | None,
-    stage2_artifact_source: str | Path | None,
+    stage1_synthetic_source: str | Path | None = None,
+    stage2_postprocess: Callable[[dict], dict] | None = None,
     stage4_request: dict,
     stage5_request: dict,
 ) -> FiveAgentWorkflowReport:
-    """Run the full five-stage workflow. ``stage1_organism_id`` is set for the real-yeast
-    fixture (a live Agent 1 invocation); ``stage2_artifact_source`` is the already-real, already-
-    committed Agent 2 output artifact to consume (see ``docs/01_orchestration_architecture.md``
-    for why this specific boundary is a documented "consume an artifact" stage, never a live
-    hand-chained re-invocation of Agent 2's own multi-stage internal pipeline). For the
-    synthetic fixture, ``stage1_organism_id`` is ``None`` and ``stage2_artifact_source`` points
-    at the harness's own hand-authored ground-truth ``agent2_model`` fixture file instead."""
+    """Run the full five-stage workflow.
+
+    Exactly one of ``stage1_organism_id`` (the real-yeast fixture: a live Agent 1 database
+    query) or ``stage1_synthetic_source`` (the synthetic fixture: a hand-authored, static Agent
+    1 view JSON file -- no real literature exists for a hand-authored ground-truth system) must
+    be given. Stage 2 is, in both cases, a genuine live invocation of Agent 2's own canonical
+    orchestration entrypoint against whatever Stage 1 produced.
+
+    ``stage2_postprocess``, when given, is applied to Stage 2's own raw output **before** it is
+    written to ``stage2_output.json`` and before any checksum/contract-version check runs
+    against it -- used only by the synthetic fixture, to patch in the species initial
+    concentrations no increment in the Agent 1 -> Agent 2 pipeline yet populates for any input
+    (a genuine, pre-existing, disclosed scope gap, also confirmed on the real `sce00061` model
+    -- see ``docs/01_orchestration_architecture.md``). Every other field Stage 2 produced is
+    passed through unchanged; the real-yeast fixture never supplies this parameter at all.
+    """
+    if (stage1_organism_id is None) == (stage1_synthetic_source is None):
+        raise ValueError(
+            "Exactly one of stage1_organism_id or stage1_synthetic_source must be given."
+        )
+
     report_id = f"harness-report-{uuid.uuid4()}"
     started = time.monotonic()
     stage_dir = _stage_dir(request)
     stages: list[WorkflowStageResult] = []
 
-    # --- Stage 1: Agent 1 -----------------------------------------------------------------
+    # --- Stage 1: Agent 1 -------------------------------------------------------------------
     stage1_output = stage_dir / "stage1_output.json"
     if stage1_organism_id is not None:
         unavailable = repo_paths.check_repo_available(repo_paths.AGENT1)
@@ -246,133 +295,105 @@ def run_workflow(
             args=["--organism-id", stage1_organism_id, "--output", str(stage1_output)],
         )
         if outcome.returncode != 0 or not stage1_output.is_file():
-            stages.append(
-                WorkflowStageResult(
-                    stage_name="agent1_curation",
-                    agent_label="Agent 1",
-                    agent_package_version=None,
-                    declared_contract_version=None,
-                    expected_contract_version=None,
-                    input_artifact_path=None,
-                    output_artifact_path=None,
-                    input_checksum=None,
-                    output_checksum=None,
-                    status=WorkflowStatus.AGENT_STAGE_FAILED,
-                    warnings=(),
-                    findings_summary=(),
-                    elapsed_seconds=outcome.elapsed_seconds,
-                    message=(
-                        f"Agent 1 stage exited with code {outcome.returncode}.\n{outcome.stderr}"
-                    ),
-                )
-            )
+            stages.append(_agent_stage_failed_result("agent1_curation", "Agent 1", outcome, None))
             return _finish(report_id, request, stages, started, stage_dir)
-        with open(stage1_output) as f:
-            stage1_data = json.load(f)
-        check = check_contract_version(
-            stage1_data,
-            boundary_name="agent1_to_agent2",
-            field_path="contract_version",
-            expected_version=CONTRACT_VERSION_MATRIX[0][2],
-        )
-        stages.append(
-            WorkflowStageResult(
-                stage_name="agent1_curation",
-                agent_label="Agent 1",
-                agent_package_version=stage1_data.get("contract_version"),
-                declared_contract_version=check.actual_version,
-                expected_contract_version=check.expected_version,
-                input_artifact_path=None,
-                output_artifact_path=str(stage1_output),
-                input_checksum=None,
-                output_checksum=sha256_of_file(stage1_output),
-                status=WorkflowStatus.SUCCESS
-                if check.matches
-                else WorkflowStatus.CONTRACT_MISMATCH,
-                warnings=(),
-                findings_summary=(
-                    f"reactions={len(stage1_data.get('reactions', []))}",
-                    f"compounds={len(stage1_data.get('compounds', []))}",
-                    f"kinetic_measurements={len(stage1_data.get('kinetic_measurements', []))}",
-                ),
-                elapsed_seconds=outcome.elapsed_seconds,
-                message=None if check.matches else "Agent 1 output contract_version mismatch.",
-            )
-        )
-        if not check.matches:
-            return _finish(report_id, request, stages, started, stage_dir)
+        elapsed = outcome.elapsed_seconds
+        warnings: tuple[str, ...] = ()
     else:
-        stages.append(
-            WorkflowStageResult(
-                stage_name="agent1_curation",
-                agent_label="Agent 1",
-                agent_package_version=None,
-                declared_contract_version=None,
-                expected_contract_version=None,
-                input_artifact_path=None,
-                output_artifact_path=None,
-                input_checksum=None,
-                output_checksum=None,
-                status=WorkflowStatus.SUCCESS,
-                warnings=(
-                    "Synthetic fixture: Agent 1's own runtime was not invoked (no real "
-                    "literature exists for a hand-authored ground-truth system) -- see "
-                    "docs/01_orchestration_architecture.md for the disclosed rationale.",
-                ),
-                findings_summary=(),
-                elapsed_seconds=None,
-                message=None,
-            )
+        shutil.copy(stage1_synthetic_source, stage1_output)
+        elapsed = None
+        warnings = (
+            "Synthetic fixture: Agent 1's own runtime was not invoked (no real literature "
+            "exists for a hand-authored ground-truth system) -- a static, hand-authored Agent "
+            "1 view JSON is supplied directly as this stage's own output, then routed through "
+            "Agent 2's own real, live, canonical pipeline exactly like the real-yeast fixture. "
+            "See docs/01_orchestration_architecture.md for the disclosed rationale.",
         )
 
-    # --- Stage 2: Agent 2 (consumed artifact, not live-invoked) ----------------------------
-    stage2_output = stage_dir / "stage2_output.json"
-    if stage2_artifact_source is None:
+    with open(stage1_output) as f:
+        stage1_data = json.load(f)
+    check1 = check_contract_version(
+        stage1_data,
+        boundary_name="agent1_to_agent2",
+        field_path="contract_version",
+        expected_version=CONTRACT_VERSION_MATRIX[0][2],
+    )
+    stages.append(
+        WorkflowStageResult(
+            stage_name="agent1_curation",
+            agent_label="Agent 1",
+            agent_package_version=stage1_data.get("contract_version"),
+            declared_contract_version=check1.actual_version,
+            expected_contract_version=check1.expected_version,
+            input_artifact_path=None,
+            output_artifact_path=str(stage1_output),
+            input_checksum=None,
+            output_checksum=sha256_of_file(stage1_output),
+            status=WorkflowStatus.SUCCESS if check1.matches else WorkflowStatus.CONTRACT_MISMATCH,
+            warnings=warnings,
+            findings_summary=(
+                f"reactions={len(stage1_data.get('reactions', []))}",
+                f"compounds={len(stage1_data.get('compounds', []))}",
+                f"kinetic_measurements={len(stage1_data.get('kinetic_measurements', []))}",
+            ),
+            elapsed_seconds=elapsed,
+            message=None if check1.matches else "Agent 1 output contract_version mismatch.",
+        )
+    )
+    if not check1.matches:
+        return _finish(report_id, request, stages, started, stage_dir)
+
+    # --- Stage 2: Agent 2 -- always a genuine, live canonical-pipeline invocation -----------
+    stage2_raw_output = stage_dir / "stage2_output_raw.json"
+    unavailable = repo_paths.check_repo_available(repo_paths.AGENT2)
+    if unavailable is not None:
+        stages.append(_blocked_result("agent2_assembly", "Agent 2", unavailable))
+        return _finish(report_id, request, stages, started, stage_dir)
+    outcome2 = run_stage_subprocess(
+        venv_python=repo_paths.AGENT2.venv_python,
+        script_path=_RUNNERS_DIR / "run_agent2.py",
+        cwd=repo_paths.AGENT2.repo_dir,
+        args=["--input", str(stage1_output), "--output", str(stage2_raw_output)],
+    )
+    if outcome2.returncode != 0 or not stage2_raw_output.is_file():
         stages.append(
-            _blocked_result("agent2_assembly", "Agent 2", "No stage2_artifact_source supplied.")
+            _agent_stage_failed_result("agent2_assembly", "Agent 2", outcome2, stage1_output)
         )
         return _finish(report_id, request, stages, started, stage_dir)
-    shutil.copy(stage2_artifact_source, stage2_output)
-    with open(stage2_output) as f:
-        stage2_data = json.load(f)
+
+    try:
+        with open(stage2_raw_output) as f:
+            stage2_data = json.load(f)
+    except (json.JSONDecodeError, OSError) as exc:
+        stages.append(
+            _invalid_json_result(
+                "agent2_assembly", "Agent 2", outcome2, stage1_output, stage2_raw_output, exc
+            )
+        )
+        return _finish(report_id, request, stages, started, stage_dir)
+
+    stage2_warnings: tuple[str, ...] = ()
+    if stage2_postprocess is not None:
+        stage2_data = stage2_postprocess(stage2_data)
+        stage2_warnings = (
+            "Synthetic fixture: species initial concentrations were patched onto Agent 2's own "
+            "real, live, canonical pipeline output -- no increment in the Agent 1 -> Agent 2 "
+            "pipeline yet populates them for any input (a genuine, pre-existing, disclosed "
+            "scope gap, also confirmed on the real sce00061 model). Every other field "
+            "(species/reactions/kinetic_laws/parameters/antimony structure) is this run's own "
+            "real, unmodified Agent 2 pipeline output.",
+        )
+
+    stage2_output = stage_dir / "stage2_output.json"
+    with open(stage2_output, "w") as f:
+        json.dump(stage2_data, f, indent=2)
+
     check2 = check_contract_version(
         stage2_data,
         boundary_name="agent2_to_agent3",
         field_path="contract_version",
         expected_version=CONTRACT_VERSION_MATRIX[1][2],
     )
-    stage2_warnings = ()
-    translate_findings: tuple[str, ...] = ()
-    if stage1_organism_id is not None:
-        stage2_warnings = (
-            "Real-yeast fixture: Agent 2's own multi-stage internal assembly pipeline has no "
-            "single already-tested end-to-end entrypoint to safely re-invoke live (confirmed "
-            "this session) -- this stage CONSUMES Agent 2's own already-real, already-"
-            "committed output artifact for this exact network, per this task's own "
-            "'invokes or consumes' allowance. See docs/01_orchestration_architecture.md.",
-        )
-        # A genuine, live, additional check beyond a static contract-version comparison: does
-        # Agent 2's own real translate_agent1_view_to_agent2 entrypoint actually accept the
-        # freshly-curated Agent 1 view this exact run just produced?
-        translate_check_output = stage_dir / "stage2_translate_check.json"
-        translate_unavailable = repo_paths.check_repo_available(repo_paths.AGENT2)
-        if translate_unavailable is None:
-            translate_outcome = run_stage_subprocess(
-                venv_python=repo_paths.AGENT2.venv_python,
-                script_path=_RUNNERS_DIR / "run_agent2.py",
-                cwd=repo_paths.AGENT2.repo_dir,
-                args=["--input", str(stage1_output), "--output", str(translate_check_output)],
-            )
-            if translate_outcome.returncode == 0 and translate_check_output.is_file():
-                with open(translate_check_output) as f:
-                    translate_result = json.load(f)
-                translate_findings = (
-                    f"agent1_to_agent2_translate_ok={translate_result.get('translated')}",
-                )
-        else:
-            translate_findings = (
-                f"agent1_to_agent2_translate_check_skipped={translate_unavailable}",
-            )
     stages.append(
         WorkflowStageResult(
             stage_name="agent2_assembly",
@@ -380,22 +401,14 @@ def run_workflow(
             agent_package_version=None,
             declared_contract_version=check2.actual_version,
             expected_contract_version=check2.expected_version,
-            input_artifact_path=str(stage1_output) if stage1_organism_id is not None else None,
+            input_artifact_path=str(stage1_output),
             output_artifact_path=str(stage2_output),
-            input_checksum=sha256_of_file(stage1_output)
-            if stage1_organism_id is not None
-            else None,
+            input_checksum=sha256_of_file(stage1_output),
             output_checksum=sha256_of_file(stage2_output),
             status=WorkflowStatus.SUCCESS if check2.matches else WorkflowStatus.CONTRACT_MISMATCH,
             warnings=stage2_warnings,
-            findings_summary=(
-                f"species={len(stage2_data.get('species', []))}",
-                f"reactions={len(stage2_data.get('reactions', []))}",
-                f"parameters={len(stage2_data.get('parameters', []))}",
-                f"readiness={stage2_data.get('readiness')}",
-                *translate_findings,
-            ),
-            elapsed_seconds=None,
+            findings_summary=_agent2_findings(stage2_data)[1],
+            elapsed_seconds=outcome2.elapsed_seconds,
             message=None if check2.matches else "Agent 2 output contract_version mismatch.",
         )
     )
@@ -578,12 +591,16 @@ def _finish(
         if stage5_input is not None:
             stage5_input_agent2 = stage5_input.get("agent2_model")
             stage5_input_agent4 = stage5_input.get("agent4_report")
+        stage4_input_path = stage_dir / "stage4_input.json"
+        stage4_input = _load_json_safely(stage4_input_path)
+        stage4_input_agent2 = stage4_input.get("agent2_model") if stage4_input is not None else None
         invariant_checks = run_invariant_checks(
             stage2_output=stage2_data,
             stage3_output=stage3_data,
             stage4_output=stage4_data,
             stage5_input_agent2_model=stage5_input_agent2,
             stage5_input_agent4_report=stage5_input_agent4,
+            stage4_input_agent2_model=stage4_input_agent2,
         )
         if any(not c.passed for c in invariant_checks) and overall in (
             WorkflowStatus.SUCCESS,
