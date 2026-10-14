@@ -263,8 +263,8 @@ def test_model_artifact_reference_points_at_agent2_output(synthetic_workbench_ru
 
 def test_agent_contract_versions_are_recorded(synthetic_workbench_run):
     (_returncode, result), _run_id = synthetic_workbench_run
-    assert result["agent_contract_versions"]["agent1_curation"] == "1.6"
-    assert result["agent_contract_versions"]["agent2_assembly"] == "agent2-downstream-v2"
+    assert result["agent_contract_versions"]["agent1_curation"] == "1.7"
+    assert result["agent_contract_versions"]["agent2_assembly"] == "agent2-downstream-v3"
 
 
 def test_synthetic_source_warning_is_disclosed(synthetic_workbench_run):

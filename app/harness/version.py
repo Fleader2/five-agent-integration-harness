@@ -49,6 +49,29 @@ boundary instead of re-deriving a symbol. ``AGENT3_EXPECTED_AGENT2_VERSION``/
 ``AGENT4_EXPECTED_HANDOFF_VERSION``/``AGENT5_EXPECTED_HANDOFF_VERSION`` all update
 automatically (each is an alias of ``AGENT2_DOWNSTREAM_CONTRACT_VERSION`` below, never a
 separately-maintained copy).
+
+**Agent 1 -> Agent 2 Biological Display Metadata Contract increment:** ``AGENT1_CONTRACT_
+VERSION``/``AGENT2_EXPECTED_AGENT1_VERSION`` bumped ``"1.6"`` -> ``"1.7"``, mirroring Agent 1's
+own real bump (additive ``genes``/``proteins`` fields on its handoff). This increment also
+resolves the stale-constant technical debt the comment on ``AGENT2_EXPECTED_AGENT1_VERSION``
+below used to disclose: Agent 2's own ``AGENT1_HANDOFF_VERSION`` constant, previously stuck
+at ``"1.5"`` since Agent 1's Increment 3, is now also ``"1.7"`` -- genuinely current, not
+merely tracked around here. ``AGENT2_CONTRACT_VERSION`` bumped ``"0.12"`` -> ``"0.13"`` to
+match Agent 2's own real bump (``FullNetwork`` gained matching ``genes``/``proteins``
+fields, ``ReactionSpecification`` gained ``ec_number``, ``ParameterSpecification`` gained
+``substrate_id``) -- recorded here for traceability only, same as before, never itself
+matrix-enforced.
+
+**Explicit Enzyme Concentration Representation increment:** ``AGENT2_DOWNSTREAM_CONTRACT_
+VERSION`` bumped ``"agent2-downstream-v2"`` -> ``"agent2-downstream-v3"``, mirroring Agent 2's
+own real bump (``species[]`` gained ``source_protein_id``, ``kinetic_laws[]`` gained
+``rate_law_scope`` -- both purely additive). ``AGENT3_EXPECTED_AGENT2_VERSION``/
+``AGENT4_EXPECTED_HANDOFF_VERSION``/``AGENT5_EXPECTED_HANDOFF_VERSION`` all update
+automatically (each is an alias below, never a separately-maintained copy) -- each of Agents
+3, 4, and 5 bumped its own identical constant in step. ``AGENT2_CONTRACT_VERSION`` bumped
+``"0.13"`` -> ``"0.14"`` to match Agent 2's own real bump (``SpeciesSpecification`` gained
+``source_protein_id``, ``KineticLawSpecification`` gained ``rate_law_scope``) -- recorded here
+for traceability only, same as before, never itself matrix-enforced.
 """
 
 from __future__ import annotations
@@ -56,26 +79,24 @@ from __future__ import annotations
 HARNESS_CONTRACT_VERSION = "0.2"
 
 #: ``agent1-biochemical-curator/app/agent1/types.py`` -- ``AGENT1_CONTRACT_VERSION``.
-AGENT1_CONTRACT_VERSION = "1.6"
+AGENT1_CONTRACT_VERSION = "1.7"
 
-#: Agent 1's own real, current, live ``AGENT1_CONTRACT_VERSION`` -- not
-#: ``agent2-antimony-builder/app/agent2/version.py``'s own (stale, unenforced)
-#: ``AGENT1_HANDOFF_VERSION`` constant, which still says ``"1.5"``. Confirmed by direct
-#: inspection of Agent 2's actual runtime code (see module docstring) that Agent 2 does not
-#: compare an incoming ``contract_version`` against that constant at all, so tracking Agent 1's
-#: real value here -- rather than Agent 2's own stale, never-enforced one -- is what actually
-#: reflects the two agents' real, verified compatibility.
-AGENT2_EXPECTED_AGENT1_VERSION = "1.6"
+#: Agent 1's own real, current, live ``AGENT1_CONTRACT_VERSION``. As of the Biological
+#: Display Metadata increment this also matches Agent 2's own ``AGENT1_HANDOFF_VERSION``
+#: constant (``agent2-antimony-builder/app/agent2/version.py``) -- no longer the stale,
+#: unenforced drift this comment used to disclose (Agent 2's own constant was stuck at
+#: ``"1.5"`` since Agent 1's Increment 3; both are now genuinely current).
+AGENT2_EXPECTED_AGENT1_VERSION = "1.7"
 
 #: ``agent2-antimony-builder/app/agent2/version.py`` -- ``AGENT2_CONTRACT_VERSION`` (Agent 2's
 #: own ``ModelSpecification``/``FullAntimonyArtifact`` contract version -- not itself checked
 #: by any downstream agent's handoff parser, but recorded for traceability).
-AGENT2_CONTRACT_VERSION = "0.12"
+AGENT2_CONTRACT_VERSION = "0.14"
 
 #: ``agent2-antimony-builder/app/agent2/version.py`` -- ``AGENT2_DOWNSTREAM_CONTRACT_VERSION``.
 #: The one canonical name Agent 2's own ``app.agent2.pipeline.run_agent2_pipeline`` emits, and
 #: the single value every downstream boundary below now checks for.
-AGENT2_DOWNSTREAM_CONTRACT_VERSION = "agent2-downstream-v2"
+AGENT2_DOWNSTREAM_CONTRACT_VERSION = "agent2-downstream-v3"
 
 #: ``agent2-antimony-builder/app/agent2/build_request/types.py`` --
 #: ``AGENT2_BUILD_REQUEST_CONTRACT_VERSION`` (Scoped-Build Support increment). Recorded here for

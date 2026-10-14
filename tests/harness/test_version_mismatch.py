@@ -66,4 +66,4 @@ def test_corrupted_agent2_contract_version_stops_before_agent3(tmp_path, monkeyp
     agent2_stage = next(s for s in report.stages if s.stage_name == "agent2_assembly")
     assert agent2_stage.status is WorkflowStatus.CONTRACT_MISMATCH
     assert agent2_stage.declared_contract_version == "not-a-real-contract-version"
-    assert agent2_stage.expected_contract_version == "agent2-downstream-v2"
+    assert agent2_stage.expected_contract_version == "agent2-downstream-v3"

@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.6",
+  "contract_version": "1.7",
   "organism_id": "synthetic-ground-truth-organism",
   "compartments": [
     {

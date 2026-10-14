@@ -214,9 +214,15 @@ def test_real_workflow_agent1_curates_real_data(real_workflow_report):
 
 
 def test_real_workflow_agent2_reports_executable(real_workflow_report):
-    """``species``/``reactions`` have stayed exactly 53/38 across every independent real run
-    observed so far (KEGG's own pathway membership and SGD/UniProt's own protein set are both
-    rigid). ``parameters`` is intentionally a floor, not an exact equality: observed values of
+    """``reactions`` has stayed exactly 38 across every independent real run observed so far
+    (KEGG's own pathway membership is rigid). ``species`` was exactly 53 (compound species
+    only) before the Explicit Enzyme Concentration Representation increment; it is now 66 --
+    53 compound species + one explicit catalytic-enzyme species per each of this organism's
+    13 curated proteins (ACC1, HFA1, FAS1, FAS2, CEM1, ETR1, FAA1-4, MCT1, OAR1, HTD2), all 13
+    resolving to a single uniform reaction compartment (cytosol) and therefore all 13 getting
+    exactly one species each (``app.agent2.enzyme_concentration_species
+    .build_enzyme_concentration_species``'s own dedup-by-(protein, compartment) rule).
+    ``parameters`` is intentionally a floor, not an exact equality: observed values of
     87 and 91 across two otherwise-identical independent live runs (same reaction/kinetic-
     measurement counts both times) show Agent 2's own parameter-consolidation stage is
     sensitive to some real, legitimate variation in the live kinetic evidence Agent 1 supplies
@@ -226,7 +232,7 @@ def test_real_workflow_agent2_reports_executable(real_workflow_report):
     agent2_stage = real_workflow_report.stages[1]
     findings = dict(f.split("=") for f in agent2_stage.findings_summary)
     assert findings["readiness"] == "EXECUTABLE"
-    assert int(findings["species"]) == 53
+    assert int(findings["species"]) == 66
     assert int(findings["reactions"]) == 38
     assert int(findings["parameters"]) >= 80
     assert agent2_stage.elapsed_seconds is not None
