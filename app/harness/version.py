@@ -36,6 +36,19 @@ payload (additive fields only, nothing removed or reshaped) parses into Agent 2'
 exactly as before. The two are genuinely compatible today; only this harness's own copied
 bookkeeping was wrong. Agent 2's own unbumped constant is Agent 2's repository to fix, not this
 harness's, and is left alone here.
+
+**Human-Readable Antimony Naming and Provenance Separation increment:**
+``AGENT2_DOWNSTREAM_CONTRACT_VERSION`` bumped ``"agent2-downstream-v1"`` ->
+``"agent2-downstream-v2"``, mirroring Agent 2's own real bump. Agent 2's generated Antimony
+symbols now prefer a curated biological name over a bare id; this silently broke Agent 3's own
+independent re-derivation of the old id-only naming rule (``app.agent3.antimony_ids``, now
+removed from that repository). Antimony symbol assignment is Agent 2-owned data: the new
+``antimony_symbol_map`` field on the downstream handoff is Agent 2's own canonical-id ->
+real-Antimony-symbol mapping, and Agent 3 now reads it directly at the ``agent2_to_agent3``
+boundary instead of re-deriving a symbol. ``AGENT3_EXPECTED_AGENT2_VERSION``/
+``AGENT4_EXPECTED_HANDOFF_VERSION``/``AGENT5_EXPECTED_HANDOFF_VERSION`` all update
+automatically (each is an alias of ``AGENT2_DOWNSTREAM_CONTRACT_VERSION`` below, never a
+separately-maintained copy).
 """
 
 from __future__ import annotations
@@ -62,7 +75,7 @@ AGENT2_CONTRACT_VERSION = "0.12"
 #: ``agent2-antimony-builder/app/agent2/version.py`` -- ``AGENT2_DOWNSTREAM_CONTRACT_VERSION``.
 #: The one canonical name Agent 2's own ``app.agent2.pipeline.run_agent2_pipeline`` emits, and
 #: the single value every downstream boundary below now checks for.
-AGENT2_DOWNSTREAM_CONTRACT_VERSION = "agent2-downstream-v1"
+AGENT2_DOWNSTREAM_CONTRACT_VERSION = "agent2-downstream-v2"
 
 #: ``agent2-antimony-builder/app/agent2/build_request/types.py`` --
 #: ``AGENT2_BUILD_REQUEST_CONTRACT_VERSION`` (Scoped-Build Support increment). Recorded here for

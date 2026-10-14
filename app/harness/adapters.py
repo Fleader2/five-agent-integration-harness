@@ -4,7 +4,7 @@ Every function here performs exactly the field-subset/wrapping transformation ea
 agent's own documented contract requires -- never a new judgment, never a recomputed finding,
 and (Five-Agent Workflow V1 Hardening increment) never a rewrite of any field. Agent 2's own
 canonical ``run_agent2_pipeline`` entrypoint now emits exactly one ``contract_version``
-(``"agent2-downstream-v1"``) that Agents 3, 4, and 5 all already expect unchanged -- the
+(``"agent2-downstream-v2"``) that Agents 3, 4, and 5 all already expect unchanged -- the
 ``agent2_model`` dict these functions wrap is passed through byte-for-byte identical to what
 Stage 2 itself produced, never copied or re-stamped. This is the one place the harness's own
 code touches artifact *shape* (as opposed to simply copying a file byte-for-byte), and each
