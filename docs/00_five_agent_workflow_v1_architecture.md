@@ -40,8 +40,8 @@ contract-version mismatch, a stage failure, or an invalid artifact (see
 
 | Constant | Value | Declared in |
 |---|---|---|
-| Agent 1 handoff version (`AGENT1_CONTRACT_VERSION`) | `1.5` | `agent1-biochemical-curator/app/agent1/types.py` |
-| Agent 2's own expected Agent 1 version (`AGENT1_HANDOFF_VERSION`) | `1.5` | `agent2-antimony-builder/app/agent2/version.py` |
+| Agent 1 handoff version (`AGENT1_CONTRACT_VERSION`) | `1.6` | `agent1-biochemical-curator/app/agent1/types.py` |
+| Agent 2's own expected Agent 1 version (`AGENT1_HANDOFF_VERSION`) | `1.5` (stale; see `docs/02_contract_version_matrix.md`) | `agent2-antimony-builder/app/agent2/version.py` — not actually enforced by Agent 2's own runtime, and this harness now tracks Agent 1's real value instead |
 | Agent 2's own model/Antimony contract (`AGENT2_CONTRACT_VERSION`) | `0.12` | `agent2-antimony-builder/app/agent2/version.py` |
 | Agent 2's orchestration policy (`AGENT2_ORCHESTRATION_POLICY_VERSION`) | `agent2-orchestration-v1` | `agent2-antimony-builder/app/agent2/version.py` |
 | **Canonical Agent 2 downstream contract** (`AGENT2_DOWNSTREAM_CONTRACT_VERSION`) | **`agent2-downstream-v1`** | `agent2-antimony-builder/app/agent2/version.py` — the one value Agents 3, 4, and 5 all expect unchanged |
@@ -64,7 +64,7 @@ replaced.
 
 | Agent | Consumes | Produces | Explicitly does not |
 |---|---|---|---|
-| **Agent 1** | Live, already-curated Postgres database (compartments, compounds, reactions, kinetic measurements, enzyme states, evidence) | `Agent1CuratedKnowledgeView` (JSON, `contract_version=1.5`) | Resolve kinetics, build a model, invent a measurement, write to the database |
+| **Agent 1** | Live, already-curated Postgres database (compartments, compounds, reactions, kinetic measurements, enzyme states, evidence) | `Agent1CuratedKnowledgeView` (JSON, `contract_version=1.6`) | Resolve kinetics, build a model, invent a measurement, write to the database |
 | **Agent 2** | Agent 1's curated view | The canonical downstream handoff (`contract_version=agent2-downstream-v1`): model/network ids, Antimony text, readiness, compartments/species/reactions, kinetic laws, parameters with provenance/bounds/`fixed`, model assumptions | Simulate, calibrate, validate, invent a kinetic mechanism not supported by evidence or policy |
 | **Agent 3** | Agent 2's canonical handoff | `Agent3Report` (diagnostics, heuristic/placeholder parameter ids, sufficiency verdict) | Alter the model, retry with different tolerances, calibrate anything |
 | **Agent 4** | Agent 2's canonical handoff + Agent 3's diagnostics view + a `CalibrationRequest` | `Agent4Report` (fitted parameter estimates with original value/source preserved alongside the fitted value, identifiability findings, residuals) | Fit a parameter the request does not explicitly authorize, change a fixed/evidence-backed parameter |

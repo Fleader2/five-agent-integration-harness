@@ -47,6 +47,17 @@ python3 -m venv .venv
 
 See `docs/05_running_the_fixtures.md` for prerequisites and what each fixture proves.
 
+## Workbench invocation
+
+`scripts/run_workbench_request.py` is the canonical, documented entrypoint
+for the `mechanistic-modeling-workbench` repository (or anything else) to
+invoke this harness on behalf of a persisted project/subproject, with a
+versioned request/result contract, idempotent replay by `run_id`, and
+deterministic pre-flight rejections. It adds no new orchestration
+mechanism -- it is a thin contract wrapper around the exact same
+`run_workflow` the two fixture scripts above already call. See
+`docs/07_workbench_harness_contract.md` for the full contract.
+
 ## Tests
 
 ```bash
