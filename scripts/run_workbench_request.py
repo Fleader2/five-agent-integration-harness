@@ -45,10 +45,17 @@ around that exact, pre-existing mechanism.
    ``MISSING_INPUT_ARTIFACT``. The Workbench never needs to understand
    Agent 4's/Agent 5's own request shape to supply these: it only stores
    and forwards a reference to a file it (or a human) already produced.
-7. ``model_build_request_id``, if supplied, is recorded in the result's
-   own ``warnings`` -- the disclosed gap: Agent 2 has no mechanism to
-   consume a scoped build request yet (see
-   ``docs/07_workbench_harness_contract.md``).
+7. **Scoped-Build Support increment.**
+   ``input_artifact_references["model_build_request"]``, when present, must name a readable
+   JSON file shaped like Agent 2's own ``app.agent2.build_request.ModelBuildRequest`` contract
+   -- otherwise ``MISSING_INPUT_ARTIFACT``, exactly like ``stage4_request``/``stage5_request``.
+   When present and readable, its path is forwarded to Stage 2 (``run_workflow``'s own
+   ``stage2_build_request_path``), and any resulting scoping warning is promoted into this
+   result's own top-level ``warnings``. ``model_build_request_id`` supplied *without* this
+   artifact key is still recorded, with a disclosed warning that it could not be acted on (the
+   Workbench must supply the artifact's content, not merely its id -- the harness has no
+   database access of its own to look it up). See
+   ``docs/07_workbench_harness_contract.md``.
 8. The real ``run_workflow`` runs, exactly as either existing fixture
    script invokes it. Its own ``FiveAgentWorkflowReport`` is written in
    full to ``workflow_report.json`` (unchanged, for full traceability),
@@ -145,19 +152,31 @@ def _execute(
 
     stage4_request_path = request.input_artifact_references.get("stage4_request")
     stage5_request_path = request.input_artifact_references.get("stage5_request")
+    model_build_request_path = request.input_artifact_references.get("model_build_request")
     missing = [
         name
         for name, value in (
             ("stage4_request", stage4_request_path),
             ("stage5_request", stage5_request_path),
+            ("model_build_request", model_build_request_path),
         )
-        if value is None or not Path(value).is_file()
+        if value is not None and not Path(value).is_file()
     ]
-    if missing:
+    required_missing = [
+        name
+        for name, value in (
+            ("stage4_request", stage4_request_path),
+            ("stage5_request", stage5_request_path),
+        )
+        if value is None
+    ]
+    if missing or required_missing:
         return _rejection(
             run_id=request.run_id,
             code=WorkbenchRunErrorCode.MISSING_INPUT_ARTIFACT,
-            message=f"Missing or unreadable input_artifact_references: {missing}",
+            message=(
+                f"Missing or unreadable input_artifact_references: {missing + required_missing}"
+            ),
         )
 
     with open(stage4_request_path) as f:
@@ -165,11 +184,12 @@ def _execute(
     with open(stage5_request_path) as f:
         stage5_request = json.load(f)
 
-    if request.model_build_request_id is not None:
+    if request.model_build_request_id is not None and model_build_request_path is None:
         warnings.append(
-            "model_build_request_id was supplied but is not yet consumed: Agent 2 has no "
-            "mechanism to accept a scoped build request, so the full curated knowledge view "
-            "was used unscoped. See docs/07_workbench_harness_contract.md."
+            "model_build_request_id was supplied but no model_build_request artifact was "
+            "included: the harness has no database access of its own to look up its content "
+            "by id, so the full curated knowledge view was used unscoped. See "
+            "docs/07_workbench_harness_contract.md."
         )
 
     workflow_request = WorkflowRunRequest(
@@ -185,6 +205,7 @@ def _execute(
             stage1_organism_id=None,
             stage1_synthetic_source=Path(synthetic_source),
             stage2_postprocess=patch_synthetic_ground_truth_initial_conditions,
+            stage2_build_request_path=model_build_request_path,
             stage4_request=stage4_request,
             stage5_request=stage5_request,
         )
@@ -196,6 +217,7 @@ def _execute(
         report = run_workflow(
             workflow_request,
             stage1_organism_id=request.agent1_organism_id,
+            stage2_build_request_path=model_build_request_path,
             stage4_request=stage4_request,
             stage5_request=stage5_request,
         )
@@ -203,6 +225,10 @@ def _execute(
 
     report_path = stage_directory / "workflow_report.json"
     _write(report_path, dataclasses.asdict(report))
+
+    agent2_stage = next((s for s in report.stages if s.stage_name == "agent2_assembly"), None)
+    if agent2_stage is not None:
+        warnings.extend(agent2_stage.warnings)
 
     output_artifact_references = {
         s.stage_name: s.output_artifact_path for s in report.stages if s.output_artifact_path

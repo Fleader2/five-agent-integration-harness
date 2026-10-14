@@ -252,6 +252,7 @@ def run_workflow(
     stage1_organism_id: str | None,
     stage1_synthetic_source: str | Path | None = None,
     stage2_postprocess: Callable[[dict], dict] | None = None,
+    stage2_build_request_path: str | Path | None = None,
     stage4_request: dict,
     stage5_request: dict,
 ) -> FiveAgentWorkflowReport:
@@ -270,6 +271,14 @@ def run_workflow(
     (a genuine, pre-existing, disclosed scope gap, also confirmed on the real `sce00061` model
     -- see ``docs/01_orchestration_architecture.md``). Every other field Stage 2 produced is
     passed through unchanged; the real-yeast fixture never supplies this parameter at all.
+
+    ``stage2_build_request_path`` (Scoped-Build Support increment), when given, names a JSON
+    file shaped like Agent 2's own ``app.agent2.build_request.ModelBuildRequest`` contract --
+    forwarded to Stage 2's own runner as ``--build-request``, which parses and passes it
+    straight through to ``run_agent2_pipeline``. Omitting it (the default, ``None``) reproduces
+    this function's exact pre-existing Stage 2 invocation with no change whatsoever. Any
+    scoping warning Agent 2 itself reports is parsed back out of that runner's own stdout and
+    attached to Stage 2's own ``WorkflowStageResult.warnings``.
     """
     if (stage1_organism_id is None) == (stage1_synthetic_source is None):
         raise ValueError(
@@ -349,11 +358,14 @@ def run_workflow(
     if unavailable is not None:
         stages.append(_blocked_result("agent2_assembly", "Agent 2", unavailable))
         return _finish(report_id, request, stages, started, stage_dir)
+    agent2_args = ["--input", str(stage1_output), "--output", str(stage2_raw_output)]
+    if stage2_build_request_path is not None:
+        agent2_args += ["--build-request", str(stage2_build_request_path)]
     outcome2 = run_stage_subprocess(
         venv_python=repo_paths.AGENT2.venv_python,
         script_path=_RUNNERS_DIR / "run_agent2.py",
         cwd=repo_paths.AGENT2.repo_dir,
-        args=["--input", str(stage1_output), "--output", str(stage2_raw_output)],
+        args=agent2_args,
     )
     if outcome2.returncode != 0 or not stage2_raw_output.is_file():
         stages.append(
@@ -372,10 +384,15 @@ def run_workflow(
         )
         return _finish(report_id, request, stages, started, stage_dir)
 
-    stage2_warnings: tuple[str, ...] = ()
+    stage2_warnings: tuple[str, ...] = tuple(
+        line.removeprefix("agent2_build_request_warning=")
+        for line in outcome2.stdout.splitlines()
+        if line.startswith("agent2_build_request_warning=")
+    )
     if stage2_postprocess is not None:
         stage2_data = stage2_postprocess(stage2_data)
         stage2_warnings = (
+            *stage2_warnings,
             "Synthetic fixture: species initial concentrations were patched onto Agent 2's own "
             "real, live, canonical pipeline output -- no increment in the Agent 1 -> Agent 2 "
             "pipeline yet populates them for any input (a genuine, pre-existing, disclosed "

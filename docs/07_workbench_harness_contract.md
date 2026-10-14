@@ -68,19 +68,50 @@ partial/entry-stage execution mode. A request naming any other value is
 rejected with `UNSUPPORTED_ENTRY_STAGE` before any agent runs -- this is a
 disclosed gap, not a silent fallback to the full pipeline.
 
-### The disclosed `ModelBuildRequest` gap
+### `ModelBuildRequest` scoped builds (Scoped-Build Support increment)
 
-`model_build_request_id`, when supplied, is recorded in the result's own
-`warnings` but has **no effect on execution**. Agent 2 only consumes
-`Agent1CuratedKnowledgeViewContract` and has no mechanism to accept a
-scoped/partial build request -- confirmed directly against Agent 2's own
-code. Until Agent 2 (or a new, explicitly-designed contract) gains that
-capability, every Workbench-invoked run builds against the full curated
-knowledge view, unscoped, regardless of what `ModelBuildRequest` content
-the Workbench may be holding. This is intentional: inventing a new,
-unreviewed Agent 2 scientific contract inside this increment would be
-exactly the kind of scope creep the project's own architecture audit
-exists to prevent.
+Agent 2 now has a real, narrow mechanism to accept a scoped/partial build
+request: `app.agent2.build_request.ModelBuildRequest` (Agent 2's own
+local, decoupled contract, named identically to the Workbench's own
+`ModelBuildRequest` -- see that module's own docstring for the full
+naming-collision rationale). The harness carries one of these through
+unread and unparsed, exactly like `stage4_request`/`stage5_request`:
+
+* `input_artifact_references["model_build_request"]`, when present, must
+  name a readable JSON file shaped like Agent 2's own `ModelBuildRequest`
+  contract (`AGENT2_BUILD_REQUEST_CONTRACT_VERSION`,
+  `"agent2-build-request-v1"`). Missing/unreadable -> deterministic
+  `MISSING_INPUT_ARTIFACT`, exactly like `stage4_request`/`stage5_request`.
+* When present, its path is forwarded to Stage 2's own runner as
+  `--build-request`; Agent 2 parses it, restricts its own assembled
+  network to that request's scope, and reports any resulting warning
+  (an unresolved reference, an unsupported pathway constraint, ...) back
+  on its own stdout as an `agent2_build_request_warning=<text>` line.
+  `run_workflow` collects these into Stage 2's own
+  `WorkflowStageResult.warnings`; the canonical entrypoint promotes them
+  into the top-level `WorkbenchRunResult.warnings`.
+* `model_build_request_id` supplied **without** this artifact key is
+  still recorded, with a disclosed warning that it could not be acted
+  on: the harness has no database access of its own, so it cannot look
+  up a `ModelBuildRequest`'s content by id alone -- the Workbench must
+  supply the serialized content itself. This is the one remaining,
+  intentional limitation: the harness never reaches into the Workbench's
+  database, exactly as it never reaches into any agent's.
+* A contradictory `ModelBuildRequest` (e.g. the same reaction named both
+  required and excluded) or one whose own constraints resolve to zero
+  retained reactions causes Agent 2's own runner to exit non-zero --
+  reported, like any other agent-stage failure, as `WORKFLOW_FAILED`
+  with `error.stage_name == "agent2_assembly"`. No new error code was
+  introduced for this: a build-request contradiction is exactly the kind
+  of stage failure this contract's existing `WORKFLOW_FAILED` semantics
+  already cover.
+* Existing requests that never set
+  `input_artifact_references["model_build_request"]` are completely
+  unaffected -- Stage 2's own runner invocation gains no new argument,
+  and `run_agent2_pipeline` is called exactly as before. No
+  contract-version bump was needed for this: `input_artifact_references`
+  was already an open `{name: path}` dict, so recognizing one more key is
+  backward compatible by construction.
 
 ## Run lifecycle and idempotent replay
 
@@ -116,7 +147,8 @@ that file directly.
    `input_artifact_references["stage1_synthetic_source"]` is set ->
    `INVALID_STAGE1_INPUT`.
 6. `input_artifact_references["stage4_request"]`/`["stage5_request"]`
-   missing or unreadable -> `MISSING_INPUT_ARTIFACT`.
+   missing or unreadable, or `["model_build_request"]` *present but*
+   unreadable -> `MISSING_INPUT_ARTIFACT`.
 
 Only after all six checks pass does `run_workflow` actually run. If it
 fails partway (a `CONTRACT_MISMATCH`/`AGENT_STAGE_FAILED`/
@@ -150,4 +182,10 @@ Nothing in `workbench_contracts.py` or `run_workbench_request.py`
 inspects, transforms, or re-derives any agent's own scientific content.
 The entrypoint's only "decisions" are the six deterministic, pre-flight
 checks above, all about the *shape* of the request, never about biology,
-models, simulations, calibration, or validation.
+models, simulations, calibration, or validation. This remains true after
+the Scoped-Build Support increment: the harness forwards a
+`model_build_request` artifact's own file path unread, and promotes
+stdout warning lines Agent 2 itself already produced -- it never parses
+the `ModelBuildRequest` contract's own content, decides what counts as a
+contradiction, or applies any scope filtering itself. All of that logic
+lives in `agent2-antimony-builder/app/agent2/build_request`.

@@ -1,0 +1,9 @@
+{
+  "contract_version": "agent2-build-request-v1",
+  "model_build_request_id": "mbr-synthetic-test-1",
+  "reactions": [
+    {"role": "REQUIRED", "agent1_entity_id": "reaction-1"},
+    {"role": "REQUIRED", "agent1_entity_id": "reaction-2"}
+  ],
+  "assumptions": ["Scope the synthetic ground-truth fixture to its first two reactions only."]
+}

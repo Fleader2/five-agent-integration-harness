@@ -155,6 +155,19 @@ def test_missing_input_artifact_is_rejected(tmp_path):
     assert result["error"]["code"] == WorkbenchRunErrorCode.MISSING_INPUT_ARTIFACT.value
 
 
+def test_missing_model_build_request_artifact_is_rejected(tmp_path):
+    """Scoped-Build Support increment: unlike ``model_build_request_id`` alone (a disclosed,
+    non-fatal warning), a supplied ``model_build_request`` artifact *path* that does not exist
+    is rejected exactly like a missing ``stage4_request``/``stage5_request``."""
+    request_data = _base_request("missing-build-request-artifact")
+    request_data["input_artifact_references"]["model_build_request"] = str(
+        tmp_path / "does-not-exist.json"
+    )
+    returncode, result = _invoke_entrypoint(tmp_path, request_data)
+    assert returncode == 1
+    assert result["error"]["code"] == WorkbenchRunErrorCode.MISSING_INPUT_ARTIFACT.value
+
+
 def test_invalid_stage1_input_both_set_is_rejected(tmp_path):
     request_data = _base_request(
         "stage1-both", agent1_organism_id="fc66ef94-9fc1-4a8c-969c-d129c839cb26"
@@ -299,3 +312,44 @@ def test_replay_of_a_pre_execution_rejection_is_also_cached(tmp_path):
     assert second_returncode == 1
     assert second_result["replayed"] is True
     assert second_result["error"]["code"] == first_result["error"]["code"]
+
+
+# --- Scoped-Build Support increment: model_build_request_id / artifact, end to end ----------
+
+
+def test_model_build_request_id_without_artifact_is_disclosed_and_unscoped(tmp_path):
+    """A real run supplying only ``model_build_request_id`` (no artifact content) must succeed
+    unscoped, with a disclosed warning naming the reason -- never a silent no-op."""
+    run_id = "mbr-id-only-unscoped"
+    request_data = _base_request(run_id, model_build_request_id="mbr-no-artifact")
+    returncode, result = _invoke_entrypoint(tmp_path, request_data)
+    assert returncode == 0
+    assert result["status"] == WorkbenchRunStatus.SUCCEEDED.value
+    assert any("model_build_request_id was supplied" in w for w in result["warnings"])
+    agent2_path = Path(result["output_artifact_references"]["agent2_assembly"])
+    agent2_model = json.loads(agent2_path.read_text())
+    assert len(agent2_model["reactions"]) == 3  # unscoped: all three fixture reactions
+
+
+def test_model_build_request_artifact_scopes_the_real_run(tmp_path):
+    """A real run supplying both ``model_build_request_id`` and the artifact's own content
+    (``input_artifact_references["model_build_request"]``) must restrict Agent 2's own output
+    to that artifact's scope, with no "not consumed" disclosure."""
+    run_id = "mbr-artifact-scoped"
+    request_data = _base_request(
+        run_id,
+        model_build_request_id="mbr-synthetic-test-1",
+        input_artifact_references={
+            "stage1_synthetic_source": str(_FIXTURES / "synthetic_agent1_view.json"),
+            "stage4_request": str(_FIXTURES / "synthetic_model_build_request_stage4_request.json"),
+            "stage5_request": str(_FIXTURES / "synthetic_stage5_request.json"),
+            "model_build_request": str(_FIXTURES / "synthetic_model_build_request.json"),
+        },
+    )
+    returncode, result = _invoke_entrypoint(tmp_path, request_data)
+    assert returncode == 0
+    assert result["status"] == WorkbenchRunStatus.SUCCEEDED.value
+    assert not any("model_build_request_id was supplied" in w for w in result["warnings"])
+    agent2_path = Path(result["output_artifact_references"]["agent2_assembly"])
+    agent2_model = json.loads(agent2_path.read_text())
+    assert {r["reaction_id"] for r in agent2_model["reactions"]} == {"reaction-1", "reaction-2"}

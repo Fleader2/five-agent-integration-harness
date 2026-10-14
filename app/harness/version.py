@@ -64,6 +64,14 @@ AGENT2_CONTRACT_VERSION = "0.12"
 #: the single value every downstream boundary below now checks for.
 AGENT2_DOWNSTREAM_CONTRACT_VERSION = "agent2-downstream-v1"
 
+#: ``agent2-antimony-builder/app/agent2/build_request/types.py`` --
+#: ``AGENT2_BUILD_REQUEST_CONTRACT_VERSION`` (Scoped-Build Support increment). Recorded here for
+#: traceability only, like ``AGENT2_CONTRACT_VERSION`` above -- never matrix-enforced, because
+#: this is an *input* artifact to Stage 2, not an output boundary a downstream stage consumes;
+#: Agent 2's own ``build_request_from_dict`` is what actually checks a supplied
+#: ``model_build_request`` artifact's own ``contract_version`` against it.
+AGENT2_BUILD_REQUEST_CONTRACT_VERSION = "agent2-build-request-v1"
+
 #: ``agent3-simulation-diagnostics/app/agent3/version.py`` -- ``AGENT2_HANDOFF_CONTRACT_VERSION``
 #: (what Agent 3 itself expects the ``contract_version`` field to say).
 AGENT3_EXPECTED_AGENT2_VERSION = AGENT2_DOWNSTREAM_CONTRACT_VERSION
@@ -104,6 +112,7 @@ CONTRACT_VERSION_MATRIX: tuple[tuple[str, str, str], ...] = (
 
 __all__ = [
     "AGENT1_CONTRACT_VERSION",
+    "AGENT2_BUILD_REQUEST_CONTRACT_VERSION",
     "AGENT2_CONTRACT_VERSION",
     "AGENT2_DOWNSTREAM_CONTRACT_VERSION",
     "AGENT2_EXPECTED_AGENT1_VERSION",

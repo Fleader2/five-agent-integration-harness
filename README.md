@@ -58,6 +58,15 @@ mechanism -- it is a thin contract wrapper around the exact same
 `run_workflow` the two fixture scripts above already call. See
 `docs/07_workbench_harness_contract.md` for the full contract.
 
+**Scoped-Build Support increment:** `input_artifact_references["model_build_request"]`,
+when supplied, is forwarded unread to Agent 2's own runner as `--build-request`, which restricts
+Agent 2's own assembled network to that `ModelBuildRequest`'s scope and reports any resulting
+warning back through `WorkbenchRunResult.warnings`. The harness never parses the artifact's
+content or applies any scoping itself. See `docs/07_workbench_harness_contract.md`'s own
+"`ModelBuildRequest` -> Agent 2 scoped builds" section and
+`agent2-antimony-builder/docs/20_scoped_build_support.md` for the full, canonical,
+cross-repository record of this increment.
+
 ## Tests
 
 ```bash
