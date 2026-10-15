@@ -85,6 +85,20 @@ no new contract version or matrix row is needed for this boundary). New
 ``MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION = "module-calibration-workflow-v1"`` versions this
 module's own Agent4-``CalibrationStatus``-to-``ModuleCalibrationStatus`` mapping and field
 derivation policy; no other version constant changes.
+
+**Calibration Evidence Integration into Weight-Space Exploration increment:**
+``MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION`` bumped ``"module-calibration-workflow-v1"`` ->
+``"module-calibration-workflow-v2"`` -- two real policy changes: (1) ``parameter_uncertainty``/
+``parameter_correlations`` now pass through Agent 4's own newly-exposed ``standard_error``/
+``parameter_correlations`` fields (``AGENT4_CONTRACT_VERSION`` ``"0.1"`` -> ``"0.2"`` on the
+sibling repository) instead of disclosing them as always-unavailable, re-sorting each
+correlation pair into canonical (``target_id_a < target_id_b``) order; (2) an Agent 3/Agent 4
+subprocess crash or timeout now raises ``ModuleCalibrationWorkflowError`` (an infrastructure/
+numerical failure) instead of being silently mapped to a disclosed ``CALIBRATION_FAILED``
+result -- that previous behavior conflated "the harness/agent broke" with "the module itself
+calibrates poorly," a real negative-evidence claim it had no basis to make. Never persisted as
+a cached result either, so a retry after the underlying infrastructure problem is fixed is free
+to actually re-run.
 """
 
 from __future__ import annotations
@@ -160,8 +174,11 @@ CONTRACT_VERSION_MATRIX: tuple[tuple[str, str, str], ...] = (
 #: Recursive Module Evaluation Orchestration increment -- the version of
 #: ``app.harness.module_calibration``'s own mapping policy (Agent 4 ``CalibrationStatus`` ->
 #: ``ModuleCalibrationStatus``, fit-quality/identifiability-finding/boundary-sensitivity field
-#: derivation).
-MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION = "module-calibration-workflow-v1"
+#: derivation). Bumped to v2 by the Calibration Evidence Integration into Weight-Space
+#: Exploration increment (exposes Agent 4's own standard_error/parameter_correlations;
+#: distinguishes an infrastructure/numerical subprocess failure from genuine negative
+#: evidence).
+MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION = "module-calibration-workflow-v2"
 
 __all__ = [
     "AGENT1_CONTRACT_VERSION",

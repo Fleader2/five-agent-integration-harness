@@ -53,8 +53,13 @@ _BOUNDARY_SENSITIVITY_CATEGORIES = frozenset({"BOUND_HIT", "LOW_SENSITIVITY"})
 
 
 class ModuleCalibrationWorkflowError(ValueError):
-    """Raised only for a genuine orchestration defect (a malformed request dict, an Agent 4
-    ``INVALID_REQUEST`` outcome) -- never for a real, disclosed calibration outcome."""
+    """Raised only for a genuine orchestration/infrastructure defect -- a malformed request
+    dict, an Agent 4 ``INVALID_REQUEST`` outcome, or an Agent 3/Agent 4 subprocess crash or
+    timeout (Calibration Evidence Integration into Weight-Space Exploration increment: keeping
+    infrastructure/numerical failures distinguishable from genuine negative evidence about the
+    proposed module, task instructions §3) -- never for a real, disclosed calibration
+    outcome. Never persisted as a cached result: a retry after the underlying problem is fixed
+    must be free to actually re-run, never replay a stale infrastructure failure."""
 
 
 def build_module_agent3_handoff(request: dict[str, Any]) -> dict[str, Any]:
@@ -145,15 +150,28 @@ def map_calibration_result_to_module_evaluation(
         {
             "target_id": p["target_id"],
             "fitted_value": p["fitted_value"],
-            # Agent 4 computes a covariance matrix internally (for its own HIGH_CORRELATION
-            # finding threshold check) but does not expose per-parameter standard errors as
-            # public data today -- disclosed as unavailable, never fabricated. See
-            # docs/31_recursive_module_evaluation_orchestration.md (agent2-antimony-builder) §5.
-            "standard_error": None,
+            # Calibration Evidence Integration into Weight-Space Exploration increment: Agent
+            # 4 now exposes this directly (the identical local-covariance computation it
+            # already performed internally for its own HIGH_CORRELATION finding, see
+            # docs/10_calibration_evidence_integration_into_weight_space_exploration.md §2) --
+            # still disclosed as null/unavailable whenever Agent 4 itself could not compute it
+            # (e.g. a simulation failure during the finite-difference Jacobian), never
+            # fabricated.
+            "standard_error": p.get("standard_error"),
         }
         for p in calibration.get("parameter_estimates", [])
     ]
-    base["parameter_correlations"] = []
+    # ModuleCalibrationEvaluation's own ParameterCorrelationEstimate requires target_id_a <
+    # target_id_b (canonical pair ordering) -- Agent 4's own pairs are in target *index* order,
+    # not necessarily lexicographic, so each pair is re-sorted here, never left as given.
+    base["parameter_correlations"] = [
+        {
+            "target_id_a": min(c["target_id_a"], c["target_id_b"]),
+            "target_id_b": max(c["target_id_a"], c["target_id_b"]),
+            "correlation": c["correlation"],
+        }
+        for c in calibration.get("parameter_correlations", [])
+    ]
     base["boundary_sensitivity_findings"] = [
         {
             "target_id": (f.get("related_target_ids") or ["unknown"])[0],
@@ -207,27 +225,19 @@ def run_module_calibration_workflow(
         timeout_seconds=timeout_seconds,
     )
     if outcome3.returncode != 0 or not agent3_output_path.is_file():
-        result = {
-            **{
-                k: request[k]
-                for k in (
-                    "parent_model_id",
-                    "modularization_id",
-                    "module_id",
-                    "request_id",
-                    "correlation_id",
-                    "run_id",
-                )
-            },
-            "evaluation_id": f"module-calibration::{run_id}::agent3-failed",
-            "status": "CALIBRATION_FAILED",
-            "policy_version": MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION,
-            "warnings": [f"Agent 3 subprocess failed: {outcome3.stderr[-500:]}"],
-            "provenance_refs": [],
-        }
-        with open(result_path, "w") as f:
-            json.dump(result, f, indent=2)
-        return result
+        # An Agent 3 subprocess crash/timeout is an infrastructure failure -- Agent 3's own
+        # pipeline never raises for a genuine simulation outcome (that is always its own
+        # disclosed SimulationStatus), so a non-zero exit here means something actually broke
+        # (a bug, a missing dependency, a timeout), never real evidence that this module
+        # itself calibrates poorly. Raised, never silently turned into a disclosed
+        # CALIBRATION_FAILED result, and never persisted as a cached outcome -- a retry after
+        # fixing the underlying infrastructure problem must be free to actually re-run.
+        raise ModuleCalibrationWorkflowError(
+            f"Agent 3 subprocess failed for run_id={run_id!r} (returncode="
+            f"{outcome3.returncode}, timed_out={outcome3.timed_out}): "
+            f"{outcome3.stderr[-500:]!r} -- this is an infrastructure/numerical failure, "
+            "never genuine evidence about the proposed module"
+        )
     with open(agent3_output_path) as f:
         agent3_report = json.load(f)
 
@@ -254,22 +264,17 @@ def run_module_calibration_workflow(
         timeout_seconds=timeout_seconds,
     )
     if outcome4.returncode != 0 or not agent4_output_path.is_file():
-        result = {
-            "parent_model_id": request["parent_model_id"],
-            "modularization_id": request["modularization_id"],
-            "module_id": request["module_id"],
-            "request_id": request["request_id"],
-            "correlation_id": request["correlation_id"],
-            "run_id": run_id,
-            "evaluation_id": f"module-calibration::{run_id}::agent4-failed",
-            "status": "CALIBRATION_FAILED",
-            "policy_version": MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION,
-            "warnings": [f"Agent 4 subprocess failed: {outcome4.stderr[-500:]}"],
-            "provenance_refs": [],
-        }
-        with open(result_path, "w") as f:
-            json.dump(result, f, indent=2)
-        return result
+        # Identical reasoning as the Agent 3 branch above: Agent 4's own pipeline never
+        # raises for a genuine calibration outcome (SIMULATION_FAILED/OPTIMIZATION_FAILED are
+        # its own disclosed CalibrationStatus values) -- a non-zero exit here is an
+        # infrastructure/numerical failure, raised and never persisted, never disclosed as
+        # module-quality evidence.
+        raise ModuleCalibrationWorkflowError(
+            f"Agent 4 subprocess failed for run_id={run_id!r} (returncode="
+            f"{outcome4.returncode}, timed_out={outcome4.timed_out}): "
+            f"{outcome4.stderr[-500:]!r} -- this is an infrastructure/numerical failure, "
+            "never genuine evidence about the proposed module"
+        )
     with open(agent4_output_path) as f:
         agent4_report = json.load(f)
 

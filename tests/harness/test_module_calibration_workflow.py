@@ -209,8 +209,14 @@ def test_full_round_trip_recovers_true_parameter(tmp_path):
         p["target_id"]: p["fitted_value"] for p in result["parameter_uncertainty"]
     }
     assert estimates["k1"] == pytest.approx(_TRUE_K, rel=0.05)
-    # Standard error is genuinely unavailable (Agent 4 does not expose it) -- never fabricated.
-    assert all(p["standard_error"] is None for p in result["parameter_uncertainty"])
+    # Calibration Evidence Integration into Weight-Space Exploration increment: Agent 4 now
+    # exposes a local standard-error estimate directly -- genuinely available here, never
+    # fabricated as a placeholder.
+    standard_errors = {p["target_id"]: p["standard_error"] for p in result["parameter_uncertainty"]}
+    assert standard_errors["k1"] is not None
+    assert standard_errors["k1"] >= 0
+    # Only one target was fit -- no correlation pair exists to report.
+    assert result["parameter_correlations"] == []
 
 
 def test_persistence_replay_does_not_rerun_agents(tmp_path):
@@ -227,6 +233,21 @@ def test_persistence_replay_does_not_rerun_agents(tmp_path):
 
     second = run_module_calibration_workflow(request, _calibration_request(), stage_dir=tmp_path)
     assert second == first
+
+
+def test_agent3_infrastructure_failure_raises_never_disclosed_as_evidence(tmp_path):
+    """A malformed module_handoff (missing a required Agent2->Agent3 field) makes Agent 3's own
+    run_agent3.py crash with a non-zero exit -- never Agent 3's own disclosed SIMULATION_FAILED
+    status. This must surface as ModuleCalibrationWorkflowError, never a silently-fabricated
+    CALIBRATION_FAILED (genuine negative evidence) result, and must never be persisted as a
+    cached outcome."""
+    run_id = f"module-calib-infra-fail-{uuid.uuid4().hex[:8]}"
+    broken_handoff = dict(_module_handoff())
+    del broken_handoff["contract_version"]
+    request = _request(run_id=run_id, module_handoff=broken_handoff)
+    with pytest.raises(ModuleCalibrationWorkflowError):
+        run_module_calibration_workflow(request, _calibration_request(), stage_dir=tmp_path)
+    assert not (tmp_path / f"module_calibration_result_{run_id}.json").is_file()
 
 
 # --- Unit tests: status mapping (no subprocess) ----------------------------------------------
@@ -297,6 +318,42 @@ def test_map_success_to_calibration_supported():
     assert result["status"] == "CALIBRATION_SUPPORTED"
     assert result["fit_quality"]["objective_after"] == 1.0
     assert result["parameter_uncertainty"][0]["target_id"] == "k1"
+
+
+def test_map_exposes_standard_error_and_sorts_correlation_pairs():
+    result = map_calibration_result_to_module_evaluation(
+        _REQUEST_DICT,
+        _agent4_report(
+            status="SUCCESS",
+            parameter_estimates=[
+                {
+                    "target_kind": "PARAMETER",
+                    "target_id": "k1",
+                    "original_value": 0.1,
+                    "original_source": "HEURISTIC_INITIALIZATION",
+                    "fitted_value": 0.7,
+                    "lower_bound": 0.001,
+                    "upper_bound": 5.0,
+                    "at_lower_bound": False,
+                    "at_upper_bound": False,
+                    "new_source": "CALIBRATED",
+                    "provenance_refs": [],
+                    "standard_error": 0.05,
+                }
+            ],
+            # Agent 4's own pairs are in target *index* order, not lexicographic -- "k2" before
+            # "k1" here, to confirm the harness always re-sorts rather than trusting input order.
+            parameter_correlations=[
+                {"target_id_a": "k2", "target_id_b": "k1", "correlation": -0.9}
+            ],
+        ),
+        _AGENT3_REPORT,
+        evaluation_id="eval-1",
+    )
+    assert result["parameter_uncertainty"][0]["standard_error"] == 0.05
+    assert result["parameter_correlations"] == [
+        {"target_id_a": "k1", "target_id_b": "k2", "correlation": -0.9}
+    ]
 
 
 def test_map_insufficient_data_discloses_no_evidence():

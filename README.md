@@ -75,6 +75,16 @@ through Agent 3 then Agent 4, and maps the result into a structured, calibration
 module-quality result for Agent 2's own Module Boundary Evaluation Framework. Agent 2 never
 calls Agent 4 (or Agent 3) directly. See `docs/09_recursive_module_evaluation_orchestration.md`.
 
+## Calibration Evidence Integration into Weight-Space Exploration
+
+Fixes a real design flaw in the module above: an Agent 3/Agent 4 subprocess crash or timeout
+(an infrastructure failure, never either agent's own disclosed outcome) is now raised as
+`ModuleCalibrationWorkflowError` instead of being silently mapped into a disclosed
+`CALIBRATION_FAILED` result — never persisted as a cached outcome. Also passes through Agent 4's
+newly-exposed `standard_error`/`parameter_correlations` fields (re-sorting each correlation pair
+into canonical order) instead of disclosing them as always-unavailable. See `docs/
+10_calibration_evidence_integration_into_weight_space_exploration.md`.
+
 ## Tests
 
 ```bash
