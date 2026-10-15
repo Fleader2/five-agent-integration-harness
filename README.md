@@ -101,6 +101,18 @@ returns `requires_user_review=True`). Agent 2 still never calls Agent 3 or Agent
 this package is the one, explicit routing point. See `docs/
 11_recursive_agent4_assisted_candidate_search_orchestration.md`.
 
+## Functional Modularity Criteria from Agents 3 and 4
+
+Mirrors the module-calibration orchestration above, but for Agent 3: `app.harness.module
+_functional_evaluation` routes one candidate module's own functional-evaluation request (a
+battery of deterministic perturbations spanning both inside and outside that module, against
+the *whole* canonical network — never the module's own filtered standalone artifact) through a
+new, focused Agent 3 runner (`app/harness/runners/run_agent3_functional_evaluation.py`, reusing
+the existing, unchanged `run_agent3_pipeline`), and maps the result into a structured
+`ModuleFunctionalEvaluationResult` for Agent 2's own `DYNAMIC_ISOLATION`/`SENSITIVITY_COHERENCE`
+criteria. Agent 2 still never calls Agent 3 directly. See `docs/
+12_functional_modularity_criteria_from_agents_3_and_4.md`.
+
 ## Tests
 
 ```bash

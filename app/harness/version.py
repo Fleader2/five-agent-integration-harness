@@ -117,6 +117,24 @@ like ``app.harness.module_calibration`` already is for a single module. New
 ``RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION = "recursive-candidate-search-v1"``, baked directly
 into every cache key alongside ``MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION``/
 ``AGENT3_CONTRACT_VERSION``/``AGENT4_CONTRACT_VERSION``; no other version constant changes.
+
+**Functional Modularity Criteria from Agents 3 and 4 increment:** new ``app.harness.module
+_functional_evaluation`` module -- mirrors ``app.harness.module_calibration``'s own role, but
+for Agent 3: routes one Agent 2 candidate module's own functional-evaluation request (a battery
+of deterministic perturbations spanning both inside and outside that module, against the
+*whole* canonical network -- never the module's own filtered standalone artifact, since dynamic
+isolation/sensitivity coherence are properties of behavior *relative to context*, which only
+exists in the whole-network simulation) through Agent 3, and maps the result into a structured
+``ModuleFunctionalEvaluationResult`` dict for Agent 2's own ``app.agent2.module_evaluation
+.functional_adapter``. Reuses Agent 3's own, already-existing, unchanged ``app.agent3.pipeline
+.run_agent3_pipeline`` (which already accepted an explicit ``perturbation_specs`` override) via
+a new, focused runner script (``run_agent3_functional_evaluation.py``) -- no new Agent 3
+simulation algorithm; the only real Agent 3-side change is one new, additive field
+(``PerturbationResult.relative_change_by_species``, exposing per-species data that module
+already computed internally and previously discarded down to one scalar).
+``AGENT3_CONTRACT_VERSION`` bumped ``"0.1"`` -> ``"0.2"`` to match Agent 3's own real bump --
+recorded here for traceability only, as always, never itself matrix-enforced. New
+``FUNCTIONAL_EVALUATION_WORKFLOW_POLICY_VERSION = "functional-evaluation-workflow-v1"``.
 """
 
 from __future__ import annotations
@@ -156,7 +174,10 @@ AGENT2_BUILD_REQUEST_CONTRACT_VERSION = "agent2-build-request-v1"
 AGENT3_EXPECTED_AGENT2_VERSION = AGENT2_DOWNSTREAM_CONTRACT_VERSION
 
 #: ``agent3-simulation-diagnostics/app/agent3/version.py`` -- ``AGENT3_CONTRACT_VERSION``.
-AGENT3_CONTRACT_VERSION = "0.1"
+#: Bumped to ``"0.2"`` for the Functional Modularity Criteria increment, mirroring Agent 3's
+#: own real bump (``PerturbationResult`` gained ``relative_change_by_species``) -- recorded
+#: here for traceability only, never itself matrix-enforced.
+AGENT3_CONTRACT_VERSION = "0.2"
 
 #: ``agent4-calibration-estimator/app/agent4/version.py`` -- ``AGENT4_HANDOFF_CONTRACT_VERSION``
 #: (what Agent 4 itself expects the ``agent2_model.contract_version`` field to say).
@@ -207,6 +228,13 @@ MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION = "module-calibration-workflow-v2"
 #: previously-cached entry.
 RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION = "recursive-candidate-search-v1"
 
+#: Functional Modularity Criteria from Agents 3 and 4 increment -- the version of
+#: ``app.harness.module_functional_evaluation``'s own mapping policy (how a requested
+#: perturbation target is matched to its own Agent 3 result, which overall
+#: ``SimulationStatus`` values make the whole analysis ``UNSUPPORTED_ANALYSIS``, the per-
+#: effect field derivation).
+FUNCTIONAL_EVALUATION_WORKFLOW_POLICY_VERSION = "functional-evaluation-workflow-v1"
+
 __all__ = [
     "AGENT1_CONTRACT_VERSION",
     "AGENT2_BUILD_REQUEST_CONTRACT_VERSION",
@@ -220,6 +248,7 @@ __all__ = [
     "AGENT5_CONTRACT_VERSION",
     "AGENT5_EXPECTED_HANDOFF_VERSION",
     "CONTRACT_VERSION_MATRIX",
+    "FUNCTIONAL_EVALUATION_WORKFLOW_POLICY_VERSION",
     "HARNESS_CONTRACT_VERSION",
     "MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION",
     "RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION",
