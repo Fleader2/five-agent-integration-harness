@@ -72,6 +72,19 @@ automatically (each is an alias below, never a separately-maintained copy) -- ea
 ``"0.13"`` -> ``"0.14"`` to match Agent 2's own real bump (``SpeciesSpecification`` gained
 ``source_protein_id``, ``KineticLawSpecification`` gained ``rate_law_scope``) -- recorded here
 for traceability only, same as before, never itself matrix-enforced.
+
+**Recursive Module Evaluation Orchestration increment:** new ``app.harness.module_calibration``
+module routes one Agent 2 candidate module (already converted into a standalone executable
+Antimony submodel by Agent 2's own existing ``generate_module_artifacts`` path) through Agent 3
+then Agent 4, and maps the result back into a structured ``ModuleCalibrationEvaluation`` dict for
+Agent 2's own ``app.agent2.module_calibration``/``module_evaluation.calibration_adapter`` to
+parse -- never Agent 2 calling Agent 4 directly. The module's own synthesized Agent2->Agent3
+handoff dict declares the identical ``AGENT2_DOWNSTREAM_CONTRACT_VERSION`` a whole-model handoff
+already does (Agent 3's own parser treats every field beyond ``antimony_text`` as optional, so
+no new contract version or matrix row is needed for this boundary). New
+``MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION = "module-calibration-workflow-v1"`` versions this
+module's own Agent4-``CalibrationStatus``-to-``ModuleCalibrationStatus`` mapping and field
+derivation policy; no other version constant changes.
 """
 
 from __future__ import annotations
@@ -144,6 +157,12 @@ CONTRACT_VERSION_MATRIX: tuple[tuple[str, str, str], ...] = (
     ("agent2_agent4_to_agent5", "agent2_model.contract_version", AGENT5_EXPECTED_HANDOFF_VERSION),
 )
 
+#: Recursive Module Evaluation Orchestration increment -- the version of
+#: ``app.harness.module_calibration``'s own mapping policy (Agent 4 ``CalibrationStatus`` ->
+#: ``ModuleCalibrationStatus``, fit-quality/identifiability-finding/boundary-sensitivity field
+#: derivation).
+MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION = "module-calibration-workflow-v1"
+
 __all__ = [
     "AGENT1_CONTRACT_VERSION",
     "AGENT2_BUILD_REQUEST_CONTRACT_VERSION",
@@ -158,4 +177,5 @@ __all__ = [
     "AGENT5_EXPECTED_HANDOFF_VERSION",
     "CONTRACT_VERSION_MATRIX",
     "HARNESS_CONTRACT_VERSION",
+    "MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION",
 ]

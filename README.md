@@ -67,6 +67,14 @@ content or applies any scoping itself. See `docs/07_workbench_harness_contract.m
 `agent2-antimony-builder/docs/20_scoped_build_support.md` for the full, canonical,
 cross-repository record of this increment.
 
+## Recursive Module Evaluation Orchestration
+
+A separate, smaller, module-scoped boundary (`app/harness/module_calibration.py`) routes one
+Agent 2 candidate module — already converted into a standalone executable Antimony submodel —
+through Agent 3 then Agent 4, and maps the result into a structured, calibration-based
+module-quality result for Agent 2's own Module Boundary Evaluation Framework. Agent 2 never
+calls Agent 4 (or Agent 3) directly. See `docs/09_recursive_module_evaluation_orchestration.md`.
+
 ## Tests
 
 ```bash
