@@ -85,6 +85,22 @@ newly-exposed `standard_error`/`parameter_correlations` fields (re-sorting each 
 into canonical order) instead of disclosing them as always-unavailable. See `docs/
 10_calibration_evidence_integration_into_weight_space_exploration.md`.
 
+## Recursive Agent-4-Assisted Candidate Search Orchestration
+
+Closes the modularization loop: `app/harness/recursive_candidate_search` drives Agent 2's own
+new candidate-search orchestration (`app.agent2.candidate_orchestration`) one bounded round at
+a time via a new subprocess runner (`app/harness/runners/run_agent2_candidate_search_round.py`,
+the identical `run_agent2.py` convention), routes whatever that round's own calibration-
+selection gate selects through the unchanged `run_module_calibration_workflow`, reuses already-
+cached evidence by stable identity (module content + boundary treatment + dataset references +
+Agent 3/4 contract/policy versions — never by `run_id`) across rounds and across separate
+orchestration invocations, and applies an explicit `OrchestrationPolicy` (max rounds, total
+candidate/calibration-run budgets, a minimum-improvement threshold, stable-boundary/repeated-
+candidate-set convergence, and an opt-in human-review gate that stops after one round and
+returns `requires_user_review=True`). Agent 2 still never calls Agent 3 or Agent 4 directly —
+this package is the one, explicit routing point. See `docs/
+11_recursive_agent4_assisted_candidate_search_orchestration.md`.
+
 ## Tests
 
 ```bash

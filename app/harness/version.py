@@ -99,6 +99,24 @@ result -- that previous behavior conflated "the harness/agent broke" with "the m
 calibrates poorly," a real negative-evidence claim it had no basis to make. Never persisted as
 a cached result either, so a retry after the underlying infrastructure problem is fixed is free
 to actually re-run.
+
+**Recursive Agent-4-Assisted Candidate Search Orchestration increment:** new ``app.harness
+.recursive_candidate_search`` package -- the recursive loop this project's own prior increments
+deliberately deferred. Drives Agent 2's own new ``app.agent2.candidate_orchestration`` one
+bounded round at a time via a new subprocess runner
+(``app/harness/runners/run_agent2_candidate_search_round.py``, the identical ``run_agent2.py``
+convention), routes whatever that round's own calibration-selection gate selects through the
+unchanged ``run_module_calibration_workflow``, reuses already-cached evidence by stable
+identity (module content + boundary treatment + dataset references + Agent 3/4 contract/policy
+versions, never by ``run_id``) across rounds *and* across separate orchestration invocations,
+and applies an explicit, deterministic ``OrchestrationPolicy`` (max rounds, total candidate/
+calibration-run budgets, a minimum-improvement threshold, stable-boundary/repeated-candidate-set
+convergence, and an opt-in human-review gate that stops after one round). Agent 2 still never
+calls Agent 3 or Agent 4 directly -- this package is the one, explicit routing point, exactly
+like ``app.harness.module_calibration`` already is for a single module. New
+``RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION = "recursive-candidate-search-v1"``, baked directly
+into every cache key alongside ``MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION``/
+``AGENT3_CONTRACT_VERSION``/``AGENT4_CONTRACT_VERSION``; no other version constant changes.
 """
 
 from __future__ import annotations
@@ -180,6 +198,15 @@ CONTRACT_VERSION_MATRIX: tuple[tuple[str, str, str], ...] = (
 #: evidence).
 MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION = "module-calibration-workflow-v2"
 
+#: Recursive Agent-4-Assisted Candidate Search Orchestration increment -- the version of
+#: ``app.harness.recursive_candidate_search``'s own policy (the recursive-loop stopping rules,
+#: the calibration-evidence cache-key shape, the Agent2-round subprocess contract this harness
+#: drives). Baked directly into every cache key (``cache.cache_key_for``) alongside
+#: ``MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION``/``AGENT3_CONTRACT_VERSION``/
+#: ``AGENT4_CONTRACT_VERSION`` -- bumping any of those automatically invalidates every
+#: previously-cached entry.
+RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION = "recursive-candidate-search-v1"
+
 __all__ = [
     "AGENT1_CONTRACT_VERSION",
     "AGENT2_BUILD_REQUEST_CONTRACT_VERSION",
@@ -195,4 +222,5 @@ __all__ = [
     "CONTRACT_VERSION_MATRIX",
     "HARNESS_CONTRACT_VERSION",
     "MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION",
+    "RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION",
 ]
