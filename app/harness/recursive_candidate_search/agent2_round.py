@@ -1,7 +1,16 @@
 """Invoking one round of Agent 2's own candidate-search orchestration as an isolated
 subprocess (``run_agent2_candidate_search_round.py``) -- the real, production implementation of
 the ``invoke_round`` callable ``orchestration.run_recursive_candidate_search`` takes (tests
-inject a fast, deterministic fake instead; see that module's own docstring)."""
+inject a fast, deterministic fake instead; see that module's own docstring).
+
+``attach_modularization`` (Automatic Hierarchical Recursive Modularization increment,
+optional): a previously-accepted modularization's own structure (module ids + per-module
+content-key pairs), exactly as this harness already received it back from an earlier call's
+own ``round_summary`` -- re-attached to the freshly-rebuilt model before
+``--seed-modularization-id``/``--submodel-module-id`` are resolved, so a *descendant* level can
+materialize a submodel from one of *that* modularization's own modules. Never invents or
+re-derives membership -- see ``app.harness.hierarchical_recursion``.
+"""
 
 from __future__ import annotations
 
@@ -36,6 +45,7 @@ def invoke_agent2_candidate_search_round(
     functional_evaluation_selection_policy: dict[str, Any] | None = None,
     functional_evaluations_used_so_far: int = 0,
     functional_evaluation_evidence: list[dict[str, Any]] | None = None,
+    attach_modularization: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run one real round-trip through Agent 2's own venv, and return the parsed
     ``serialize_round_result`` dict it writes. Raises ``RecursiveCandidateSearchError`` for a
@@ -93,6 +103,11 @@ def invoke_agent2_candidate_search_round(
         with open(functional_evidence_path, "w") as f:
             json.dump(functional_evaluation_evidence, f)
         args += ["--functional-evaluation-evidence", str(functional_evidence_path)]
+    if attach_modularization is not None:
+        attach_path = stage_dir / f"candidate_search_round_attach_modularization_{run_id}.json"
+        with open(attach_path, "w") as f:
+            json.dump(attach_modularization, f)
+        args += ["--attach-modularization", str(attach_path)]
 
     outcome = run_stage_subprocess(
         venv_python=AGENT2.venv_python,

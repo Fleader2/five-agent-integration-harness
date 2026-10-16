@@ -18,13 +18,26 @@ Usage: ``run_agent2_candidate_search_round.py --input <agent1_view.json> --outpu
 [--exclude-single-module-from-ranking true|false] [--apply-resolution-correction]
 [--build-request <model_build_request.json>]
 [--functional-evaluation-selection-policy <json>] [--functional-evaluations-used-so-far N]
-[--functional-evaluation-evidence <evidence.json>] --correlation-id ID --run-id ID``
+[--functional-evaluation-evidence <evidence.json>] [--attach-modularization <json>]
+--correlation-id ID --run-id ID``
 
 **Automatic Functional-Evaluation Selection and Caching increment:**
 ``--functional-evaluation-selection-policy`` mirrors ``--calibration-selection-policy`` exactly
 but gates a real Agent 3 functional-evaluation round trip instead of an Agent 3/Agent 4
 calibration round trip; omitted entirely (the default), this round produces zero functional-
 evaluation decisions/requests, identical to every prior behavior.
+
+**Automatic Hierarchical Recursive Modularization increment:** ``--attach-modularization``
+names a JSON file (``{"modularization_id": str, "module_ids": [str, ...], "memberships":
+[{"module_id": str, "component_type": str, "component_id": str}, ...]}``) describing a
+previously-*accepted* modularization -- always structure this harness already received back
+from an earlier call's own ``serialize_round_result`` output (never invented or re-derived
+here). When given, that structure is attached to the freshly-rebuilt model (via
+``dataclasses.replace``, exactly like ``app.agent2.modularization_search.assembly
+.attach_bundle``'s own established "never mutate, always a new object" convention) *before*
+``--seed-modularization-id``/``--submodel-module-id`` are resolved -- ``--seed-modularization-
+id`` is then ignored in favor of the attached modularization's own id, so
+``--submodel-module-id`` names one of *its* modules.
 """
 
 from __future__ import annotations
@@ -49,6 +62,7 @@ def main() -> int:
     parser.add_argument("--functional-evaluation-selection-policy", required=False, default=None)
     parser.add_argument("--functional-evaluations-used-so-far", required=False, default=0, type=int)
     parser.add_argument("--functional-evaluation-evidence", required=False, default=None)
+    parser.add_argument("--attach-modularization", required=False, default=None)
     parser.add_argument(
         "--exclude-single-module-from-ranking",
         required=False,
@@ -59,6 +73,8 @@ def main() -> int:
     parser.add_argument("--correlation-id", required=True)
     parser.add_argument("--run-id", required=True)
     args = parser.parse_args()
+
+    from dataclasses import replace
 
     from app.agent2.candidate_orchestration import (
         build_submodel,
@@ -80,6 +96,13 @@ def main() -> int:
         parse_module_functional_evaluation_result,
     )
     from app.agent2.pipeline import run_agent2_pipeline
+    from app.agent2.types import (
+        ModelModularization,
+        ModelModule,
+        ModularizationMethod,
+        ModuleComponentType,
+        ModuleMembership,
+    )
 
     with open(args.input) as f:
         agent1_view = json.load(f)
@@ -95,6 +118,44 @@ def main() -> int:
     model = pipeline_result.package.model_specification
 
     seed_modularization_id = args.seed_modularization_id
+    if args.attach_modularization:
+        with open(args.attach_modularization) as f:
+            attach_data = json.load(f)
+        attached_modularization_id = attach_data["modularization_id"]
+        attached_module_ids = tuple(attach_data["module_ids"])
+        attached_modules_by_id = {
+            mid: ModelModule(module_id=mid, name=mid) for mid in attached_module_ids
+        }
+        attached_memberships = tuple(
+            ModuleMembership(
+                membership_id=(
+                    f"membership::{attached_modularization_id}::{m['module_id']}::"
+                    f"{m['component_type']}::{m['component_id']}"
+                ),
+                modularization_id=attached_modularization_id,
+                module_id=m["module_id"],
+                component_type=ModuleComponentType(m["component_type"]),
+                component_id=m["component_id"],
+            )
+            for m in attach_data["memberships"]
+        )
+        merged_modules_by_id = {m.module_id: m for m in model.model_modules}
+        merged_modules_by_id.update(attached_modules_by_id)
+        model = replace(
+            model,
+            modularizations=(
+                *model.modularizations,
+                ModelModularization(
+                    modularization_id=attached_modularization_id,
+                    name=attached_modularization_id,
+                    method=ModularizationMethod.USER_DEFINED,
+                    module_ids=attached_module_ids,
+                ),
+            ),
+            model_modules=tuple(merged_modules_by_id.values()),
+            module_memberships=(*model.module_memberships, *attached_memberships),
+        )
+        seed_modularization_id = attached_modularization_id
     if seed_modularization_id is None:
         if len(model.modularizations) == 1:
             seed_modularization_id = model.modularizations[0].modularization_id

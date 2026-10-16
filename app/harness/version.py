@@ -251,6 +251,15 @@ RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION = "recursive-candidate-search-v1"
 #: effect field derivation).
 FUNCTIONAL_EVALUATION_WORKFLOW_POLICY_VERSION = "functional-evaluation-workflow-v1"
 
+#: Automatic Hierarchical Recursive Modularization increment -- the version of
+#: ``app.harness.hierarchical_recursion``'s own policy (the child-acceptance rule comparing a
+#: submodel's own best candidate against its degenerate intact-parent baseline, the module-
+#: eligibility-for-subdivision rule, the global-budget-across-the-hierarchy bookkeeping). Never
+#: baked into any cache key: a module's own cached calibration/functional evidence is reused
+#: identically whether discovered at hierarchy depth 0 or depth 3 -- cache identity is already
+#: keyed by module content alone, never by which hierarchy node asked for it.
+HIERARCHICAL_RECURSION_POLICY_VERSION = "hierarchical-recursion-v1"
+
 __all__ = [
     "AGENT1_CONTRACT_VERSION",
     "AGENT2_BUILD_REQUEST_CONTRACT_VERSION",
@@ -266,6 +275,7 @@ __all__ = [
     "CONTRACT_VERSION_MATRIX",
     "FUNCTIONAL_EVALUATION_WORKFLOW_POLICY_VERSION",
     "HARNESS_CONTRACT_VERSION",
+    "HIERARCHICAL_RECURSION_POLICY_VERSION",
     "MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION",
     "RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION",
 ]

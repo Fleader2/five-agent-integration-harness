@@ -100,6 +100,7 @@ def run_recursive_candidate_search(
         run_module_functional_evaluation_workflow
     ),
     functional_cache: FileCalibrationEvidenceCache | None = None,
+    attach_modularization: dict[str, Any] | None = None,
 ) -> RecursiveCandidateSearchResult:
     """Run the bounded recursive loop: one Agent 2 candidate-search round, calibrate whatever
     that round's own gate selected (reusing cached evidence by stable identity where possible),
@@ -115,6 +116,12 @@ def run_recursive_candidate_search(
     ``orchestration_policy.require_human_review=True`` stops after the first round, returning
     that round's own ranked/calibrated candidate set with ``requires_user_review=True`` (task
     instructions §7) -- never proceeding to a second round without an explicit, separate call.
+
+    ``attach_modularization`` (Automatic Hierarchical Recursive Modularization increment,
+    optional): forwarded unchanged to every round's own ``invoke_round`` call -- this function
+    itself never interprets it (that is entirely ``run_agent2_candidate_search_round.py``'s own
+    job, inside Agent 2's venv); see ``app.harness.hierarchical_recursion``, which is this
+    parameter's one real caller.
     """
     stage_dir = Path(stage_dir)
     cache = (
@@ -181,6 +188,7 @@ def run_recursive_candidate_search(
             functional_evaluation_selection_policy=functional_evaluation_selection_policy,
             functional_evaluations_used_so_far=total_functional_evaluations_used,
             functional_evaluation_evidence=functional_evidence_payload,
+            attach_modularization=attach_modularization,
         )
         model_id = round_summary["model_id"]
         retained = round_summary["retained"]

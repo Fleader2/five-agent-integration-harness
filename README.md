@@ -126,6 +126,22 @@ separate orchestration invocations. Its own separate budget/stopping reason
 can be functionally evaluated without being calibrated, or vice versa. Agent 2 still never
 calls Agent 3 directly. See `docs/13_automatic_functional_evaluation_selection_and_caching.md`.
 
+## Automatic Hierarchical Recursive Modularization
+
+A second recursion *dimension* on top of the flat loop above: `app.harness
+.hierarchical_recursion.run_hierarchical_recursive_modularization` calls the unchanged
+`run_recursive_candidate_search` once per hierarchy node (the root, then recursively one call
+per module of each accepted modularization eligible for subdivision), reusing Agent 2's own
+existing `materialize_submodel`/`build_submodel` via a new `run_agent2_candidate_search_round.py`
+`--attach-modularization` flag that re-attaches a previously-accepted structure this harness
+already received back -- never duplicating Agent 2's own search/evaluation logic. A child
+decomposition is accepted only when it improves on the degenerate ("leave the parent module
+intact") baseline by a configurable margin, under the identical structural/`DYNAMIC_ISOLATION`/
+`SENSITIVITY_COHERENCE`/`CALIBRATION_INDEPENDENCE` weights already in effect. Every budget
+(hierarchy nodes, functional evaluations, calibration runs) is tracked globally across the
+whole run, never reset per branch, and the same calibration/functional-evidence caches are
+shared across every level. See `docs/14_automatic_hierarchical_recursive_modularization.md`.
+
 ## Tests
 
 ```bash
