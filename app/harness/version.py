@@ -151,6 +151,35 @@ JSON-dict file store with no calibration-specific logic. No version constant cha
 cache key exactly as it already was into the calibration one, so a bump to either policy still
 invalidates both; the functional-evaluation routing/mapping policy itself is unchanged
 (``FUNCTIONAL_EVALUATION_WORKFLOW_POLICY_VERSION`` already versions it).
+
+**Automatic Hierarchical Recursive Modularization increment:** new ``app.harness
+.hierarchical_recursion`` package -- a second recursion *dimension* (depth into nested
+submodules) built entirely on the existing, unchanged flat ``app.harness
+.recursive_candidate_search`` (one call per hierarchy node) and Agent 2's own existing
+``materialize_submodel``/``build_submodel`` (reused via a new ``run_agent2_candidate_search
+_round.py`` ``--attach-modularization`` flag, never duplicated). A child decomposition is
+accepted only when it improves on its own degenerate ("intact parent") baseline by a
+configurable margin; every budget (hierarchy nodes, functional evaluations, calibration runs)
+is tracked globally across the whole run, never reset per branch. New
+``HIERARCHICAL_RECURSION_POLICY_VERSION = "hierarchical-recursion-v1"`` -- never baked into any
+cache key, since cache identity is already keyed by module content alone, never by which
+hierarchy node asked for it.
+
+**Human-review/resume increment:** a paused run (``require_human_review=True``) now produces a
+serializable ``HierarchyCheckpoint`` (every completed node, every pending module -- each
+carrying its own self-contained ``attach_payload`` so independently-approved branches can each
+resume without shared state -- global budget consumption, and every policy/weight in effect),
+and a new ``resume_hierarchical_recursive_modularization`` entry point that continues from
+exactly that point given the caller's own approve/reject decisions (keyed by a stable
+``pending_id``) -- never re-running a completed node, never searching a rejected module. Node
+ids are now a deterministic, monotonic sequence (seeded from the checkpoint on resume) rather
+than a random UUID suffix, making repeated resume calls with identical checkpoint+decisions
+produce identical output. New ``HIERARCHICAL_RECURSION_CHECKPOINT_VERSION =
+"hierarchical-recursion-checkpoint-v1"``, checked independently of
+``HIERARCHICAL_RECURSION_POLICY_VERSION`` (the checkpoint *schema* version, not the
+acceptance-rule version) -- a caller resuming a checkpoint produced by a since-upgraded
+checkpoint schema is rejected with a clear error, never silently misinterpreted. New
+``HierarchyBranchStoppingReason.HUMAN_REVIEW_REJECTED`` (purely additive).
 """
 
 from __future__ import annotations
@@ -260,6 +289,16 @@ FUNCTIONAL_EVALUATION_WORKFLOW_POLICY_VERSION = "functional-evaluation-workflow-
 #: keyed by module content alone, never by which hierarchy node asked for it.
 HIERARCHICAL_RECURSION_POLICY_VERSION = "hierarchical-recursion-v1"
 
+#: Human-review/resume increment -- the version of the *checkpoint schema* a paused
+#: hierarchical-recursion run is serialized into (``HierarchyCheckpoint``), distinct from
+#: ``HIERARCHICAL_RECURSION_POLICY_VERSION`` above (which governs the child-acceptance/
+#: eligibility *decision rules* a checkpoint's own recorded nodes were produced under).
+#: ``resume_hierarchical_recursive_modularization`` checks a loaded checkpoint's own
+#: ``checkpoint_version`` against this constant and refuses to resume a stale/foreign one --
+#: bumping this value whenever the checkpoint's own field shape changes is what makes "fail
+#: clearly on malformed, mismatched, or stale state" possible at all.
+HIERARCHICAL_RECURSION_CHECKPOINT_VERSION = "hierarchical-recursion-checkpoint-v1"
+
 __all__ = [
     "AGENT1_CONTRACT_VERSION",
     "AGENT2_BUILD_REQUEST_CONTRACT_VERSION",
@@ -275,6 +314,7 @@ __all__ = [
     "CONTRACT_VERSION_MATRIX",
     "FUNCTIONAL_EVALUATION_WORKFLOW_POLICY_VERSION",
     "HARNESS_CONTRACT_VERSION",
+    "HIERARCHICAL_RECURSION_CHECKPOINT_VERSION",
     "HIERARCHICAL_RECURSION_POLICY_VERSION",
     "MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION",
     "RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION",

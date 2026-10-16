@@ -9,4 +9,11 @@ class HierarchicalRecursionError(ValueError):
     disclosed scientific outcome (which is always a typed result, never an exception)."""
 
 
-__all__ = ["HierarchicalRecursionError"]
+class HierarchicalRecursionCheckpointError(HierarchicalRecursionError):
+    """Raised by ``resume_hierarchical_recursive_modularization`` for a malformed, version-
+    mismatched/stale, or decision-incomplete checkpoint -- never for a disclosed scientific
+    outcome. A caller must fix the checkpoint/decisions and retry; never silently repaired or
+    guessed here."""
+
+
+__all__ = ["HierarchicalRecursionCheckpointError", "HierarchicalRecursionError"]
