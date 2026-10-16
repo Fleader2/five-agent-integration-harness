@@ -67,6 +67,14 @@ content or applies any scoping itself. See `docs/07_workbench_harness_contract.m
 `agent2-antimony-builder/docs/20_scoped_build_support.md` for the full, canonical,
 cross-repository record of this increment.
 
+**Workbench Hierarchical Recursion Contract:** `scripts/run_workbench_hierarchical_request.py`
+is a second, genuinely separate canonical entrypoint -- not the `FULL_PIPELINE` five-agent
+workflow above, but a single Automatic Hierarchical Recursive Modularization search against a
+model Agent 2 already assembled, with its own versioned request/result contract
+(`WorkbenchHierarchicalInvocationRequest`/`WorkbenchHierarchicalRunResult`), the identical
+idempotent-replay/pre-flight-rejection discipline, and a full per-node result set the Workbench
+persists as a first-class record. See `docs/15_workbench_hierarchical_recursion_contract.md`.
+
 ## Recursive Module Evaluation Orchestration
 
 A separate, smaller, module-scoped boundary (`app/harness/module_calibration.py`) routes one

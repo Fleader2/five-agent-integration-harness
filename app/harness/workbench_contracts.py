@@ -204,14 +204,262 @@ def result_from_dict(data: dict) -> WorkbenchRunResult:
     )
 
 
+#: Automatic Hierarchical Recursive Modularization increment -- this *second*, genuinely
+#: separate contract's own version. Unrelated to ``WORKBENCH_HARNESS_CONTRACT_VERSION`` above
+#: (that one names the fixed five-agent FULL_PIPELINE workflow; this one names a hierarchical
+#: modularization-refinement search against a model Agent 2 already assembled) and unrelated
+#: to ``app.harness.version.HIERARCHICAL_RECURSION_POLICY_VERSION`` (the underlying
+#: orchestration policy this contract wraps, never re-exposed or re-derived here).
+WORKBENCH_HIERARCHICAL_CONTRACT_VERSION = "workbench-hierarchical-v1"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchHierarchicalInvocationRequest:
+    """What the Workbench sends to ask the harness to run one hierarchical recursive
+    modularization search (``app.harness.hierarchical_recursion
+    .run_hierarchical_recursive_modularization``).
+
+    ``criteria_weights``/``search_policy``/``calibration_selection_policy``/
+    ``flat_orchestration_policy``/``recursion_policy`` are plain dicts, forwarded unread and
+    unparsed to the underlying orchestration call -- exactly the same "the Workbench need not
+    understand an agent's own request shape" convention
+    ``WorkbenchInvocationRequest.input_artifact_references`` already uses for Agent 4's/Agent
+    5's own request files. ``functional_evaluation_selection_policy`` is optional (``None``
+    reproduces this harness's own identical "zero functional-evaluation decisions" default).
+
+    ``input_artifact_references`` recognizes the identical ``"stage1_synthetic_source"`` key
+    ``WorkbenchInvocationRequest`` already does (test/dev only); exactly one of
+    ``agent1_organism_id`` or that key must be set, mirroring the FULL_PIPELINE contract's own
+    identical requirement.
+
+    **No calibration dataset provider.** This contract has no analog of a Stage4/Stage5 request
+    file: the canonical entrypoint always uses a calibration request provider that returns no
+    dataset, so every ``CALIBRATE`` decision resolves as ``NO_DATASET_AVAILABLE`` -- a disclosed
+    scope limit (deciding what counts as a usable calibration dataset for an arbitrary candidate
+    module is Agent 5's own future job, out of scope for this increment), never a silent
+    fabrication.
+    """
+
+    contract_version: str
+    run_id: str
+    project_id: str
+    subproject_id: str
+    criteria_weights: dict
+    search_policy: dict
+    calibration_selection_policy: dict
+    flat_orchestration_policy: dict
+    recursion_policy: dict
+    functional_evaluation_selection_policy: dict | None = None
+    model_id: str | None = None
+    agent1_organism_id: str | None = None
+    input_artifact_references: dict[str, str] = field(default_factory=dict)
+    exclude_single_module_from_ranking: bool = True
+    apply_resolution_correction: bool = False
+    correlation_id: str | None = None
+    notes: str | None = None
+    submitted_at: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchHierarchyNodeSummary:
+    """One ``app.harness.hierarchical_recursion.types.HierarchyNodeRecord``, reshaped into the
+    Workbench's own plain, JSON-ready contract -- every field read verbatim, never re-derived or
+    reinterpreted. The per-run policy/weight fields (``criteria_weights``, etc.) are
+    deliberately not repeated per node here: they are identical across every node of one run
+    and already recorded once on ``WorkbenchHierarchicalInvocationRequest`` itself."""
+
+    node_id: str
+    depth: int
+    parent_modularization_id: str | None
+    parent_module_id: str | None
+    child_submodel_id: str | None
+    child_modularization_id: str | None
+    child_module_ids: tuple[str, ...]
+    accepted: bool
+    reason: str
+    baseline_score: str | None
+    child_score: str | None
+    branch_stopping_reason: str | None
+    recursive_search_stopping_reason: str
+    recursive_search_rounds: int
+    recursive_search_policy_version: str
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchHierarchicalRunResult:
+    """What the harness reports back for one ``WorkbenchHierarchicalInvocationRequest`` --
+    the full node set (never truncated: the Workbench is expected to persist every one as its
+    own first-class, queryable record, not just this summary blob)."""
+
+    contract_version: str
+    run_id: str
+    status: WorkbenchRunStatus
+    root_model_id: str | None
+    nodes: tuple[WorkbenchHierarchyNodeSummary, ...]
+    total_nodes_created: int
+    total_functional_evaluations_used: int
+    total_calibration_runs_used: int
+    requires_user_review: bool
+    pending_review_modules: tuple[dict, ...]
+    recursion_policy_version: str
+    started_at: str | None
+    completed_at: str | None
+    error: WorkbenchRunError | None
+    summary: str
+    warnings: tuple[str, ...] = ()
+    replayed: bool = False
+
+
+def hierarchical_request_from_dict(data: dict) -> WorkbenchHierarchicalInvocationRequest:
+    """Parse a plain dict into a ``WorkbenchHierarchicalInvocationRequest``. Raises
+    ``KeyError``/``TypeError`` on a malformed request -- the canonical entrypoint catches these
+    and reports ``WorkbenchRunErrorCode.MALFORMED_REQUEST``, never a traceback."""
+    return WorkbenchHierarchicalInvocationRequest(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        project_id=data["project_id"],
+        subproject_id=data["subproject_id"],
+        criteria_weights=dict(data["criteria_weights"]),
+        search_policy=dict(data["search_policy"]),
+        calibration_selection_policy=dict(data["calibration_selection_policy"]),
+        flat_orchestration_policy=dict(data["flat_orchestration_policy"]),
+        recursion_policy=dict(data["recursion_policy"]),
+        functional_evaluation_selection_policy=(
+            dict(data["functional_evaluation_selection_policy"])
+            if data.get("functional_evaluation_selection_policy") is not None
+            else None
+        ),
+        model_id=data.get("model_id"),
+        agent1_organism_id=data.get("agent1_organism_id"),
+        input_artifact_references=dict(data.get("input_artifact_references") or {}),
+        exclude_single_module_from_ranking=bool(
+            data.get("exclude_single_module_from_ranking", True)
+        ),
+        apply_resolution_correction=bool(data.get("apply_resolution_correction", False)),
+        correlation_id=data.get("correlation_id"),
+        notes=data.get("notes"),
+        submitted_at=data.get("submitted_at"),
+    )
+
+
+def hierarchical_result_to_dict(result: WorkbenchHierarchicalRunResult) -> dict:
+    """Serialize a ``WorkbenchHierarchicalRunResult`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": result.contract_version,
+        "run_id": result.run_id,
+        "status": result.status.value,
+        "root_model_id": result.root_model_id,
+        "nodes": [
+            {
+                "node_id": n.node_id,
+                "depth": n.depth,
+                "parent_modularization_id": n.parent_modularization_id,
+                "parent_module_id": n.parent_module_id,
+                "child_submodel_id": n.child_submodel_id,
+                "child_modularization_id": n.child_modularization_id,
+                "child_module_ids": list(n.child_module_ids),
+                "accepted": n.accepted,
+                "reason": n.reason,
+                "baseline_score": n.baseline_score,
+                "child_score": n.child_score,
+                "branch_stopping_reason": n.branch_stopping_reason,
+                "recursive_search_stopping_reason": n.recursive_search_stopping_reason,
+                "recursive_search_rounds": n.recursive_search_rounds,
+                "recursive_search_policy_version": n.recursive_search_policy_version,
+            }
+            for n in result.nodes
+        ],
+        "total_nodes_created": result.total_nodes_created,
+        "total_functional_evaluations_used": result.total_functional_evaluations_used,
+        "total_calibration_runs_used": result.total_calibration_runs_used,
+        "requires_user_review": result.requires_user_review,
+        "pending_review_modules": [dict(m) for m in result.pending_review_modules],
+        "recursion_policy_version": result.recursion_policy_version,
+        "started_at": result.started_at,
+        "completed_at": result.completed_at,
+        "error": (
+            None
+            if result.error is None
+            else {
+                "code": result.error.code,
+                "message": result.error.message,
+                "stage_name": result.error.stage_name,
+            }
+        ),
+        "summary": result.summary,
+        "warnings": list(result.warnings),
+        "replayed": result.replayed,
+    }
+
+
+def hierarchical_result_from_dict(data: dict) -> WorkbenchHierarchicalRunResult:
+    """The inverse of ``hierarchical_result_to_dict`` -- used to load a cached result for
+    replay."""
+    error_data = data.get("error")
+    error = (
+        None
+        if error_data is None
+        else WorkbenchRunError(
+            code=error_data["code"],
+            message=error_data["message"],
+            stage_name=error_data.get("stage_name"),
+        )
+    )
+    return WorkbenchHierarchicalRunResult(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        status=WorkbenchRunStatus(data["status"]),
+        root_model_id=data.get("root_model_id"),
+        nodes=tuple(
+            WorkbenchHierarchyNodeSummary(
+                node_id=n["node_id"],
+                depth=n["depth"],
+                parent_modularization_id=n.get("parent_modularization_id"),
+                parent_module_id=n.get("parent_module_id"),
+                child_submodel_id=n.get("child_submodel_id"),
+                child_modularization_id=n.get("child_modularization_id"),
+                child_module_ids=tuple(n.get("child_module_ids") or ()),
+                accepted=bool(n["accepted"]),
+                reason=n["reason"],
+                baseline_score=n.get("baseline_score"),
+                child_score=n.get("child_score"),
+                branch_stopping_reason=n.get("branch_stopping_reason"),
+                recursive_search_stopping_reason=n["recursive_search_stopping_reason"],
+                recursive_search_rounds=n["recursive_search_rounds"],
+                recursive_search_policy_version=n["recursive_search_policy_version"],
+            )
+            for n in data.get("nodes", ())
+        ),
+        total_nodes_created=data.get("total_nodes_created", 0),
+        total_functional_evaluations_used=data.get("total_functional_evaluations_used", 0),
+        total_calibration_runs_used=data.get("total_calibration_runs_used", 0),
+        requires_user_review=bool(data.get("requires_user_review", False)),
+        pending_review_modules=tuple(dict(m) for m in data.get("pending_review_modules", ())),
+        recursion_policy_version=data.get("recursion_policy_version", ""),
+        started_at=data.get("started_at"),
+        completed_at=data.get("completed_at"),
+        error=error,
+        summary=data.get("summary", ""),
+        warnings=tuple(data.get("warnings", ())),
+        replayed=bool(data.get("replayed", False)),
+    )
+
+
 __all__ = [
     "SUPPORTED_ENTRY_STAGE",
     "WORKBENCH_HARNESS_CONTRACT_VERSION",
+    "WORKBENCH_HIERARCHICAL_CONTRACT_VERSION",
+    "WorkbenchHierarchicalInvocationRequest",
+    "WorkbenchHierarchicalRunResult",
+    "WorkbenchHierarchyNodeSummary",
     "WorkbenchInvocationRequest",
     "WorkbenchRunError",
     "WorkbenchRunErrorCode",
     "WorkbenchRunResult",
     "WorkbenchRunStatus",
+    "hierarchical_request_from_dict",
+    "hierarchical_result_from_dict",
+    "hierarchical_result_to_dict",
     "request_from_dict",
     "result_from_dict",
     "result_to_dict",
