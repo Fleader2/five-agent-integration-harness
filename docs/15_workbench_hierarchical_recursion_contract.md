@@ -99,3 +99,39 @@ live end-to-end subprocess invocation of the canonical entrypoint against the re
 synthetic fixture, confirming a real two-node hierarchy, nonzero `total_nodes_created`, the
 disclosed `NO_DATASET_AVAILABLE` warning, and idempotent replay. Full harness suite: 138 passed
 (125 pre-existing + 13 new); lint clean repository-wide.
+
+## 8. Resume contract (human-review/resume increment)
+
+A second, additive entrypoint, `scripts/run_workbench_hierarchical_resume_request.py`, wraps
+the harness's own (otherwise unchanged) `app.harness.hierarchical_recursion
+.resume_hierarchical_recursive_modularization`:
+
+* `WorkbenchHierarchicalRunResult` gains one new, optional field: `checkpoint: dict | None` --
+  the harness's own `serialize_checkpoint(...)` dict, populated verbatim whenever
+  `requires_user_review` is `True`. The Workbench stores this exactly as received and never
+  reinterprets its internal shape.
+* `WORKBENCH_HIERARCHICAL_RESUME_CONTRACT_VERSION` (`"workbench-hierarchical-resume-v1"`) --
+  deliberately its own version, separate from `WORKBENCH_HIERARCHICAL_CONTRACT_VERSION` (the
+  *initial*-invocation contract).
+* `WorkbenchHierarchicalResumeRequest` -- `run_id`, `contract_version`, `checkpoint` (the
+  Workbench's own stored copy of a prior result's `checkpoint`, passed back unchanged),
+  `decisions` (a `{pending_id: "APPROVE"|"REJECT"}` mapping), `correlation_id`/`notes`/
+  `submitted_at`. The result reuses the identical `WorkbenchHierarchicalRunResult` shape.
+* `WorkbenchRunErrorCode.CHECKPOINT_REJECTED` -- the new error code for a
+  `HierarchicalRecursionCheckpointError` (malformed, version-mismatched/stale, or
+  decision-incomplete checkpoint), reported cleanly, never an uncaught exception.
+
+Execution semantics mirror the initial-invocation entrypoint's own: idempotent replay keyed by
+`run_id` (each resume attempt is expected to carry its own, fresh `run_id`, under
+`workbench_hierarchical_resume_result.json`), a calibration dataset provider that always
+returns no dataset, and the full, unabridged `HierarchicalRecursionResult` written for
+traceability alongside the reshaped Workbench result. No resume/checkpoint semantics are
+duplicated here -- every decision is still made entirely inside
+`app.harness.hierarchical_recursion`.
+
+`tests/harness/test_workbench_hierarchical_resume_contract.py` (9 tests): resume-request/
+result-with-checkpoint round-trip serialization; contract-mismatch/malformed-checkpoint/
+malformed-request pre-flight rejections (fast, no subprocess); one real, live end-to-end
+resume invocation chained off a real paused initial run (module-scoped fixtures), confirming
+the resumed result succeeds, the root node is carried through unchanged (never re-searched),
+and idempotent replay. Full harness suite: 164 passed; lint clean repository-wide.

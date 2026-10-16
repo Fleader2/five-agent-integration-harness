@@ -61,6 +61,11 @@ class WorkbenchRunErrorCode(StrEnum):
     #: (``CONTRACT_MISMATCH``/``AGENT_STAGE_FAILED``/``INVALID_ARTIFACT``/``BLOCKED``), passed
     #: through verbatim as the error code when the underlying workflow itself failed.
     WORKFLOW_FAILED = "WORKFLOW_FAILED"
+    #: Human-review/resume increment: ``app.harness.hierarchical_recursion
+    #: .resume_hierarchical_recursive_modularization`` raised
+    #: ``HierarchicalRecursionCheckpointError`` -- a malformed, version-mismatched/stale, or
+    #: decision-incomplete checkpoint, passed through as this error's own ``message`` verbatim.
+    CHECKPOINT_REJECTED = "CHECKPOINT_REJECTED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -287,9 +292,11 @@ class WorkbenchHierarchyNodeSummary:
 
 @dataclass(frozen=True, slots=True)
 class WorkbenchHierarchicalRunResult:
-    """What the harness reports back for one ``WorkbenchHierarchicalInvocationRequest`` --
-    the full node set (never truncated: the Workbench is expected to persist every one as its
-    own first-class, queryable record, not just this summary blob)."""
+    """What the harness reports back for one ``WorkbenchHierarchicalInvocationRequest`` (or,
+    human-review/resume increment, one ``WorkbenchHierarchicalResumeRequest`` -- the two share
+    this identical result shape) -- the full node set (never truncated: the Workbench is
+    expected to persist every one as its own first-class, queryable record, not just this
+    summary blob)."""
 
     contract_version: str
     run_id: str
@@ -308,6 +315,12 @@ class WorkbenchHierarchicalRunResult:
     summary: str
     warnings: tuple[str, ...] = ()
     replayed: bool = False
+    #: Human-review/resume increment: the harness's own, verbatim-opaque
+    #: ``app.harness.hierarchical_recursion.serialize_checkpoint(...)`` dict -- populated only
+    #: when ``requires_user_review`` is ``True``. The Workbench stores this exactly as received
+    #: (never reinterprets its own internal shape) and passes it back, unchanged, as
+    #: ``WorkbenchHierarchicalResumeRequest.checkpoint`` to resume this run later.
+    checkpoint: dict | None = None
 
 
 def hierarchical_request_from_dict(data: dict) -> WorkbenchHierarchicalInvocationRequest:
@@ -389,6 +402,7 @@ def hierarchical_result_to_dict(result: WorkbenchHierarchicalRunResult) -> dict:
         "summary": result.summary,
         "warnings": list(result.warnings),
         "replayed": result.replayed,
+        "checkpoint": result.checkpoint,
     }
 
 
@@ -442,6 +456,66 @@ def hierarchical_result_from_dict(data: dict) -> WorkbenchHierarchicalRunResult:
         summary=data.get("summary", ""),
         warnings=tuple(data.get("warnings", ())),
         replayed=bool(data.get("replayed", False)),
+        checkpoint=data.get("checkpoint"),
+    )
+
+
+#: Human-review/resume increment -- a second, genuinely separate contract from
+#: ``WORKBENCH_HIERARCHICAL_CONTRACT_VERSION`` (that one names the *initial* invocation; this
+#: one names resuming a paused run). Deliberately its own version: a Workbench build that only
+#: knows the initial-invocation contract should never be able to accidentally construct a
+#: resume request that looks valid.
+WORKBENCH_HIERARCHICAL_RESUME_CONTRACT_VERSION = "workbench-hierarchical-resume-v1"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchHierarchicalResumeRequest:
+    """What the Workbench sends to resume one paused hierarchical-recursion run
+    (``app.harness.hierarchical_recursion.resume_hierarchical_recursive_modularization``).
+
+    ``checkpoint`` is the Workbench's own stored copy of a prior
+    ``WorkbenchHierarchicalRunResult.checkpoint`` -- passed back here verbatim, never
+    reconstructed or edited; the canonical resume entrypoint deserializes it with
+    ``app.harness.hierarchical_recursion.deserialize_checkpoint`` and validates its own
+    version compatibility exactly as that function already does for any other caller.
+    ``decisions`` maps each pending entry's own ``pending_id`` (as the paused run's own
+    ``pending_review_modules`` reported it) to ``"APPROVE"``/``"REJECT"``.
+    """
+
+    contract_version: str
+    run_id: str
+    checkpoint: dict
+    decisions: dict[str, str]
+    correlation_id: str | None = None
+    notes: str | None = None
+    submitted_at: str | None = None
+
+
+def hierarchical_resume_request_to_dict(request: WorkbenchHierarchicalResumeRequest) -> dict:
+    """Serialize a ``WorkbenchHierarchicalResumeRequest`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": request.contract_version,
+        "run_id": request.run_id,
+        "checkpoint": request.checkpoint,
+        "decisions": dict(request.decisions),
+        "correlation_id": request.correlation_id,
+        "notes": request.notes,
+        "submitted_at": request.submitted_at,
+    }
+
+
+def hierarchical_resume_request_from_dict(data: dict) -> WorkbenchHierarchicalResumeRequest:
+    """Parse a plain dict into a ``WorkbenchHierarchicalResumeRequest``. Raises
+    ``KeyError``/``TypeError`` on a malformed request -- the canonical resume entrypoint catches
+    these and reports ``WorkbenchRunErrorCode.MALFORMED_REQUEST``, never a traceback."""
+    return WorkbenchHierarchicalResumeRequest(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        checkpoint=dict(data["checkpoint"]),
+        decisions=dict(data["decisions"]),
+        correlation_id=data.get("correlation_id"),
+        notes=data.get("notes"),
+        submitted_at=data.get("submitted_at"),
     )
 
 
@@ -449,7 +523,9 @@ __all__ = [
     "SUPPORTED_ENTRY_STAGE",
     "WORKBENCH_HARNESS_CONTRACT_VERSION",
     "WORKBENCH_HIERARCHICAL_CONTRACT_VERSION",
+    "WORKBENCH_HIERARCHICAL_RESUME_CONTRACT_VERSION",
     "WorkbenchHierarchicalInvocationRequest",
+    "WorkbenchHierarchicalResumeRequest",
     "WorkbenchHierarchicalRunResult",
     "WorkbenchHierarchyNodeSummary",
     "WorkbenchInvocationRequest",
@@ -460,6 +536,8 @@ __all__ = [
     "hierarchical_request_from_dict",
     "hierarchical_result_from_dict",
     "hierarchical_result_to_dict",
+    "hierarchical_resume_request_from_dict",
+    "hierarchical_resume_request_to_dict",
     "request_from_dict",
     "result_from_dict",
     "result_to_dict",

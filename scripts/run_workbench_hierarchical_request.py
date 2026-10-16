@@ -39,7 +39,11 @@ nothing about hierarchical recursion itself is duplicated or reimplemented here,
    produced it) is written to ``hierarchical_recursion_result.json`` for full traceability, and
    reshaped into ``WorkbenchHierarchicalRunResult``, written to both
    ``artifacts/runs/<run_id>/workbench_hierarchical_result.json`` (the durable, replayable
-   artifact) and ``--output`` (this invocation's own copy).
+   artifact) and ``--output`` (this invocation's own copy). When the run paused for human
+   review, ``WorkbenchHierarchicalRunResult.checkpoint`` carries the harness's own
+   ``serialize_checkpoint(...)`` dict verbatim -- see ``scripts/run_workbench_hierarchical_
+   resume_request.py`` (human-review/resume increment), the sibling entrypoint that resumes
+   from exactly this value.
 
 No scientific logic lives here: this script never interprets, repairs, or re-derives any node's
 own acceptance decision -- it only reshapes the already-existing ``HierarchicalRecursionResult``
@@ -62,6 +66,7 @@ from app.harness import repo_paths  # noqa: E402
 from app.harness.hierarchical_recursion import (  # noqa: E402
     HierarchicalRecursionPolicy,
     run_hierarchical_recursive_modularization,
+    serialize_checkpoint,
 )
 from app.harness.recursive_candidate_search import OrchestrationPolicy  # noqa: E402
 from app.harness.subprocess_runner import run_stage_subprocess  # noqa: E402
@@ -297,6 +302,9 @@ def _execute(
         error=None,
         summary=summary,
         warnings=tuple(warnings) + tuple(result.warnings),
+        checkpoint=serialize_checkpoint(result.checkpoint)
+        if result.checkpoint is not None
+        else None,
     )
 
 
