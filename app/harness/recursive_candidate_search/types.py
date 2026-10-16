@@ -42,6 +42,10 @@ class StoppingReason(StrEnum):
     #: The underlying search produced nothing new to explore this round (every candidate was
     #: already seen, or the round's own ``retained`` set came back empty).
     SEARCH_EXHAUSTED = "SEARCH_EXHAUSTED"
+    #: ``FunctionalEvaluationSelectionPolicy.total_functional_evaluation_budget`` reached
+    #: (Automatic Functional-Evaluation Selection and Caching increment) -- checked only when
+    #: ``functional_evaluation_selection_policy`` was supplied to this call at all.
+    FUNCTIONAL_EVALUATION_BUDGET_EXHAUSTED = "FUNCTIONAL_EVALUATION_BUDGET_EXHAUSTED"
 
 
 class CalibrationRunOutcome(StrEnum):
@@ -64,6 +68,29 @@ class CalibrationRunOutcome(StrEnum):
     #: No calibration dataset was available for this module (``calibration_request_provider``
     #: returned ``None``) -- never attempted, never fabricated.
     NO_DATASET_AVAILABLE = "NO_DATASET_AVAILABLE"
+
+
+class FunctionalEvaluationRunOutcome(StrEnum):
+    """What actually happened for one ``EVALUATE`` decision this orchestration routed --
+    Automatic Functional-Evaluation Selection and Caching increment, mirrors
+    ``CalibrationRunOutcome`` exactly. There is no ``NO_DATASET_AVAILABLE`` analog: unlike
+    calibration, a functional-evaluation request is always fully self-contained (the whole-
+    network handoff plus a deterministic perturbation battery, both built entirely by Agent 2)
+    -- it never depends on an externally-supplied dataset."""
+
+    #: A genuinely new Agent 3 round trip ran and succeeded (produced a disclosed
+    #: ``EVALUATED``/``UNSUPPORTED_ANALYSIS`` outcome -- either is a real, successful round
+    #: trip, never an infrastructure failure).
+    NEW_RUN_SUCCEEDED = "NEW_RUN_SUCCEEDED"
+    #: An already-cached evaluation, keyed by this module's own stable identity, was reused
+    #: instead of running Agent 3 again.
+    REUSED_CACHED_EVIDENCE = "REUSED_CACHED_EVIDENCE"
+    #: Agent 2 itself resolved this module as ``UNSUPPORTED_ANALYSIS``/``INSUFFICIENT_TARGETS``
+    #: locally -- no round trip was ever attempted.
+    LOCALLY_RESOLVED = "LOCALLY_RESOLVED"
+    #: The Agent 3 subprocess chain failed (an infrastructure/numerical defect, never a genuine
+    #: functional-evaluation outcome) -- never cached, never counted as evidence.
+    INFRASTRUCTURE_FAILURE = "INFRASTRUCTURE_FAILURE"
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +121,21 @@ class CalibrationRunRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class FunctionalEvaluationRunRecord:
+    """One module's own, fully-reasoned functional-evaluation-routing outcome this round --
+    mirrors ``CalibrationRunRecord`` exactly, with ``agent3_report_id`` in place of
+    ``agent4_run_id`` (a functional-evaluation round trip never involves Agent 4 at all)."""
+
+    round_number: int
+    candidate_id: str
+    module_id: str
+    cache_key: str | None
+    outcome: FunctionalEvaluationRunOutcome
+    agent3_report_id: str | None
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class RoundRecord:
     """Everything one round of the recursive loop produced."""
 
@@ -105,6 +147,9 @@ class RoundRecord:
     round_summary: dict[str, Any]
     calibration_runs: tuple[CalibrationRunRecord, ...]
     best_overall_score: str | None
+    #: Automatic Functional-Evaluation Selection and Caching increment -- always empty when
+    #: ``functional_evaluation_selection_policy`` was not supplied to this orchestration call.
+    functional_evaluation_runs: tuple[FunctionalEvaluationRunRecord, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,11 +170,18 @@ class RecursiveCandidateSearchResult:
     orchestration_policy: OrchestrationPolicy
     policy_version: str
     warnings: tuple[str, ...] = ()
+    #: Automatic Functional-Evaluation Selection and Caching increment -- always ``0`` when
+    #: ``functional_evaluation_selection_policy`` was not supplied to this orchestration call;
+    #: incremented only for a genuinely new Agent 3 round trip, never for a cache hit or a
+    #: locally-resolved outcome (mirrors ``total_calibration_runs_used`` exactly).
+    total_functional_evaluations_used: int = 0
 
 
 __all__ = [
     "CalibrationRunOutcome",
     "CalibrationRunRecord",
+    "FunctionalEvaluationRunOutcome",
+    "FunctionalEvaluationRunRecord",
     "OrchestrationPolicy",
     "RecursiveCandidateSearchResult",
     "RoundRecord",

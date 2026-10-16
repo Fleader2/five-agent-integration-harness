@@ -135,6 +135,22 @@ already computed internally and previously discarded down to one scalar).
 ``AGENT3_CONTRACT_VERSION`` bumped ``"0.1"`` -> ``"0.2"`` to match Agent 3's own real bump --
 recorded here for traceability only, as always, never itself matrix-enforced. New
 ``FUNCTIONAL_EVALUATION_WORKFLOW_POLICY_VERSION = "functional-evaluation-workflow-v1"``.
+
+**Automatic Functional-Evaluation Selection and Caching increment:** ``app.harness
+.recursive_candidate_search`` gains a second, genuinely separate routing loop alongside
+calibration's own: whatever Agent 2's own new ``FunctionalEvaluationSelectionPolicy`` gate
+selects each round is routed through the unchanged ``app.harness.module_functional_evaluation
+.run_module_functional_evaluation_workflow``, reusing cached evidence by stable identity
+(module content + boundary species + perturbation-target battery + Agent 3 contract/policy
+versions -- never ``AGENT4_CONTRACT_VERSION``, since no Agent 4 call is ever involved) across
+rounds and across separate orchestration invocations, with its own separate budget/stopping
+rule (``FUNCTIONAL_EVALUATION_BUDGET_EXHAUSTED``). ``FileCalibrationEvidenceCache`` itself is
+reused verbatim (pointed at a separate ``cache_dir``) -- it was already a generic cache-key ->
+JSON-dict file store with no calibration-specific logic. No version constant changes:
+``RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION`` is baked into the new functional-evaluation
+cache key exactly as it already was into the calibration one, so a bump to either policy still
+invalidates both; the functional-evaluation routing/mapping policy itself is unchanged
+(``FUNCTIONAL_EVALUATION_WORKFLOW_POLICY_VERSION`` already versions it).
 """
 
 from __future__ import annotations

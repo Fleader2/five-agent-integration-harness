@@ -113,6 +113,19 @@ the existing, unchanged `run_agent3_pipeline`), and maps the result into a struc
 criteria. Agent 2 still never calls Agent 3 directly. See `docs/
 12_functional_modularity_criteria_from_agents_3_and_4.md`.
 
+## Automatic Functional-Evaluation Selection and Caching
+
+Mirrors the recursive calibration-routing loop above with a second, genuinely separate one:
+`app.harness.recursive_candidate_search`'s own orchestration loop now also routes whatever
+Agent 2's new `FunctionalEvaluationSelectionPolicy` gate selects each round through
+`app.harness.module_functional_evaluation` (unchanged), reusing cached evidence by stable
+identity (`functional_evaluation_cache_key_for`: module content + boundary species +
+perturbation-target battery + Agent 3 contract/policy versions) across rounds and across
+separate orchestration invocations. Its own separate budget/stopping reason
+(`FUNCTIONAL_EVALUATION_BUDGET_EXHAUSTED`) is independent of calibration's own -- a candidate
+can be functionally evaluated without being calibrated, or vice versa. Agent 2 still never
+calls Agent 3 directly. See `docs/13_automatic_functional_evaluation_selection_and_caching.md`.
+
 ## Tests
 
 ```bash

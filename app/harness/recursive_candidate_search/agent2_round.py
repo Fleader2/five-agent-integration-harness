@@ -33,6 +33,9 @@ def invoke_agent2_candidate_search_round(
     run_id: str,
     stage_dir: str | Path,
     timeout_seconds: float = 300.0,
+    functional_evaluation_selection_policy: dict[str, Any] | None = None,
+    functional_evaluations_used_so_far: int = 0,
+    functional_evaluation_evidence: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Run one real round-trip through Agent 2's own venv, and return the parsed
     ``serialize_round_result`` dict it writes. Raises ``RecursiveCandidateSearchError`` for a
@@ -76,6 +79,20 @@ def invoke_agent2_candidate_search_round(
         with open(evidence_path, "w") as f:
             json.dump(calibration_evidence, f)
         args += ["--calibration-evidence", str(evidence_path)]
+    if functional_evaluation_selection_policy is not None:
+        args += [
+            "--functional-evaluation-selection-policy",
+            json.dumps(functional_evaluation_selection_policy),
+            "--functional-evaluations-used-so-far",
+            str(functional_evaluations_used_so_far),
+        ]
+    if functional_evaluation_evidence is not None:
+        functional_evidence_path = (
+            stage_dir / f"candidate_search_round_functional_evidence_{run_id}.json"
+        )
+        with open(functional_evidence_path, "w") as f:
+            json.dump(functional_evaluation_evidence, f)
+        args += ["--functional-evaluation-evidence", str(functional_evidence_path)]
 
     outcome = run_stage_subprocess(
         venv_python=AGENT2.venv_python,

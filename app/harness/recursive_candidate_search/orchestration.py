@@ -29,11 +29,21 @@ from app.harness.module_calibration import (
     ModuleCalibrationWorkflowError,
     run_module_calibration_workflow,
 )
+from app.harness.module_functional_evaluation import (
+    ModuleFunctionalEvaluationWorkflowError,
+    run_module_functional_evaluation_workflow,
+)
 from app.harness.recursive_candidate_search.agent2_round import invoke_agent2_candidate_search_round
-from app.harness.recursive_candidate_search.cache import FileCalibrationEvidenceCache, cache_key_for
+from app.harness.recursive_candidate_search.cache import (
+    FileCalibrationEvidenceCache,
+    cache_key_for,
+    functional_evaluation_cache_key_for,
+)
 from app.harness.recursive_candidate_search.types import (
     CalibrationRunOutcome,
     CalibrationRunRecord,
+    FunctionalEvaluationRunOutcome,
+    FunctionalEvaluationRunRecord,
     OrchestrationPolicy,
     RecursiveCandidateSearchResult,
     RoundRecord,
@@ -44,12 +54,20 @@ from app.harness.version import RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION
 CalibrationRequestProvider = Callable[..., dict[str, Any] | None]
 InvokeRoundCallable = Callable[..., dict[str, Any]]
 CalibrationRunnerCallable = Callable[..., dict[str, Any]]
+FunctionalEvaluationRunnerCallable = Callable[..., dict[str, Any]]
 
 
 def _extract_agent4_run_id(evaluation: dict[str, Any]) -> str | None:
     for ref in evaluation.get("provenance_refs", []):
         if isinstance(ref, str) and ref.startswith("agent4-report::"):
             return ref[len("agent4-report::") :]
+    return None
+
+
+def _extract_agent3_report_id(evaluation: dict[str, Any]) -> str | None:
+    for ref in evaluation.get("provenance_refs", []):
+        if isinstance(ref, str) and ref.startswith("agent3-report::"):
+            return ref[len("agent3-report::") :]
     return None
 
 
@@ -77,6 +95,11 @@ def run_recursive_candidate_search(
     calibration_runner: CalibrationRunnerCallable = run_module_calibration_workflow,
     cache: FileCalibrationEvidenceCache | None = None,
     timeout_seconds: float = 300.0,
+    functional_evaluation_selection_policy: dict[str, Any] | None = None,
+    functional_evaluation_runner: FunctionalEvaluationRunnerCallable = (
+        run_module_functional_evaluation_workflow
+    ),
+    functional_cache: FileCalibrationEvidenceCache | None = None,
 ) -> RecursiveCandidateSearchResult:
     """Run the bounded recursive loop: one Agent 2 candidate-search round, calibrate whatever
     that round's own gate selected (reusing cached evidence by stable identity where possible),
@@ -100,10 +123,18 @@ def run_recursive_candidate_search(
         else FileCalibrationEvidenceCache(stage_dir / "calibration_cache")
     )
 
+    functional_cache = (
+        functional_cache
+        if functional_cache is not None
+        else FileCalibrationEvidenceCache(stage_dir / "functional_evaluation_cache")
+    )
+
     accumulated_evidence: dict[frozenset[tuple[str, str]], dict[str, Any]] = {}
+    accumulated_functional_evidence: dict[frozenset[tuple[str, str]], dict[str, Any]] = {}
     rounds: list[RoundRecord] = []
     total_candidates_seen = 0
     total_calibration_runs_used = 0
+    total_functional_evaluations_used = 0
     best_score_so_far: Decimal | None = None
     previous_structures: frozenset[tuple[str, ...]] | None = None
     previous_candidate_ids: frozenset[str] | None = None
@@ -119,6 +150,15 @@ def run_recursive_candidate_search(
                 for key, evaluation in accumulated_evidence.items()
             ]
             if accumulated_evidence
+            else None
+        )
+
+        functional_evidence_payload = (
+            [
+                {"content_key": [list(pair) for pair in sorted(key)], "evaluation": evaluation}
+                for key, evaluation in accumulated_functional_evidence.items()
+            ]
+            if accumulated_functional_evidence
             else None
         )
 
@@ -138,6 +178,9 @@ def run_recursive_candidate_search(
             run_id=f"{run_id_prefix}::round{round_number}",
             stage_dir=stage_dir,
             timeout_seconds=timeout_seconds,
+            functional_evaluation_selection_policy=functional_evaluation_selection_policy,
+            functional_evaluations_used_so_far=total_functional_evaluations_used,
+            functional_evaluation_evidence=functional_evidence_payload,
         )
         model_id = round_summary["model_id"]
         retained = round_summary["retained"]
@@ -266,6 +309,109 @@ def run_recursive_candidate_search(
                 )
             )
 
+        functional_requests_by_key = {
+            (entry["request"]["modularization_id"], entry["request"]["module_id"]): entry
+            for entry in round_summary.get("functional_evaluation_requests", [])
+        }
+        functional_locally_resolved_by_key = {
+            (entry["evaluation"]["modularization_id"], entry["evaluation"]["module_id"]): entry
+            for entry in round_summary.get("locally_resolved_functional_evidence", [])
+        }
+
+        functional_evaluation_runs: list[FunctionalEvaluationRunRecord] = []
+        functional_decisions = (
+            round_summary.get("functional_evaluation_decisions", [])
+            if functional_evaluation_selection_policy is not None
+            else []
+        )
+        for decision in functional_decisions:
+            if decision["outcome"] != "EVALUATE":
+                continue
+            key = (decision["candidate_id"], decision["module_id"])
+            content_key = frozenset((pair[0], pair[1]) for pair in decision["content_key"])
+
+            locally_resolved = functional_locally_resolved_by_key.get(key)
+            if locally_resolved is not None:
+                evaluation = locally_resolved["evaluation"]
+                accumulated_functional_evidence[content_key] = evaluation
+                functional_evaluation_runs.append(
+                    FunctionalEvaluationRunRecord(
+                        round_number=round_number,
+                        candidate_id=decision["candidate_id"],
+                        module_id=decision["module_id"],
+                        cache_key=None,
+                        outcome=FunctionalEvaluationRunOutcome.LOCALLY_RESOLVED,
+                        agent3_report_id=None,
+                        reason=(
+                            "resolved locally by Agent 2 (UNSUPPORTED_ANALYSIS/"
+                            "INSUFFICIENT_TARGETS); no round trip"
+                        ),
+                    )
+                )
+                continue
+
+            envelope = functional_requests_by_key.get(key)
+            if envelope is None:
+                continue  # defensive: an EVALUATE decision always has a request or a local
+                # resolution; see app.agent2.candidate_orchestration.round
+            request = envelope["request"]
+            functional_cache_key = functional_evaluation_cache_key_for(
+                decision["content_key"],
+                request["boundary_species_ids"],
+                request["perturbation_targets"],
+            )
+            cached = functional_cache.get(functional_cache_key)
+            if cached is not None:
+                accumulated_functional_evidence[content_key] = cached
+                functional_evaluation_runs.append(
+                    FunctionalEvaluationRunRecord(
+                        round_number=round_number,
+                        candidate_id=decision["candidate_id"],
+                        module_id=decision["module_id"],
+                        cache_key=functional_cache_key,
+                        outcome=FunctionalEvaluationRunOutcome.REUSED_CACHED_EVIDENCE,
+                        agent3_report_id=_extract_agent3_report_id(cached),
+                        reason=(
+                            "reused cached evidence (identical module structure/boundary "
+                            "species/perturbation battery/policy versions)"
+                        ),
+                    )
+                )
+                continue
+
+            try:
+                evaluation = functional_evaluation_runner(
+                    request, stage_dir=stage_dir, timeout_seconds=timeout_seconds
+                )
+            except ModuleFunctionalEvaluationWorkflowError as exc:
+                functional_evaluation_runs.append(
+                    FunctionalEvaluationRunRecord(
+                        round_number=round_number,
+                        candidate_id=decision["candidate_id"],
+                        module_id=decision["module_id"],
+                        cache_key=functional_cache_key,
+                        outcome=FunctionalEvaluationRunOutcome.INFRASTRUCTURE_FAILURE,
+                        agent3_report_id=None,
+                        reason=str(exc),
+                    )
+                )
+                continue
+
+            accumulated_functional_evidence[content_key] = evaluation
+            functional_cache.put(functional_cache_key, evaluation)
+            total_functional_evaluations_used += 1
+            functional_evaluation_runs.append(
+                FunctionalEvaluationRunRecord(
+                    round_number=round_number,
+                    candidate_id=decision["candidate_id"],
+                    module_id=decision["module_id"],
+                    cache_key=functional_cache_key,
+                    outcome=FunctionalEvaluationRunOutcome.NEW_RUN_SUCCEEDED,
+                    agent3_report_id=_extract_agent3_report_id(evaluation),
+                    reason="new Agent 3 round trip succeeded",
+                )
+            )
+
         rounds.append(
             RoundRecord(
                 round_number=round_number,
@@ -274,6 +420,7 @@ def run_recursive_candidate_search(
                 best_overall_score=str(best_overall_score)
                 if best_overall_score is not None
                 else None,
+                functional_evaluation_runs=tuple(functional_evaluation_runs),
             )
         )
 
@@ -289,6 +436,13 @@ def run_recursive_candidate_search(
             >= calibration_selection_policy["total_calibration_run_budget"]
         ):
             stopping_reason = StoppingReason.CALIBRATION_BUDGET_EXHAUSTED
+            break
+        if (
+            functional_evaluation_selection_policy is not None
+            and total_functional_evaluations_used
+            >= functional_evaluation_selection_policy["total_functional_evaluation_budget"]
+        ):
+            stopping_reason = StoppingReason.FUNCTIONAL_EVALUATION_BUDGET_EXHAUSTED
             break
         if not retained:
             stopping_reason = StoppingReason.SEARCH_EXHAUSTED
@@ -333,6 +487,7 @@ def run_recursive_candidate_search(
         orchestration_policy=orchestration_policy,
         policy_version=RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION,
         warnings=tuple(warnings),
+        total_functional_evaluations_used=total_functional_evaluations_used,
     )
 
 
