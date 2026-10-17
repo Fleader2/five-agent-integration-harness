@@ -325,6 +325,15 @@ MODULE_BOUNDARY_DERIVATION_WORKFLOW_POLICY_VERSION = "module-boundary-derivation
 #: a change to ``module_calibration.py``'s own contract or behavior).
 MODULE_CALIBRATION_EXECUTION_WORKFLOW_POLICY_VERSION = "module-calibration-execution-workflow-v1"
 
+#: Module-Level Agent5 Validation and Experimental Design increment -- the version of
+#: ``app.harness.module_validation_execution``'s own request/result shape (routing one
+#: accepted hierarchy module's own resolved ``attach_payload`` through Agent 2 materialization,
+#: then Agent 5 against a *prior, already-succeeded* module-calibration execution's own frozen
+#: ``agent4_report`` -- Agent 3/Agent 4 are never re-invoked by this workflow). Returns the
+#: full, verbatim ``agent5_report`` dict, mirroring ``module_calibration_execution.py``'s own
+#: identical "never compress the downstream agent's own report" policy.
+MODULE_VALIDATION_EXECUTION_WORKFLOW_POLICY_VERSION = "module-validation-execution-workflow-v1"
+
 __all__ = [
     "AGENT1_CONTRACT_VERSION",
     "AGENT2_BUILD_REQUEST_CONTRACT_VERSION",
@@ -346,5 +355,6 @@ __all__ = [
     "MODULE_CALIBRATION_EXECUTION_WORKFLOW_POLICY_VERSION",
     "MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION",
     "MODULE_SIMULATION_WORKFLOW_POLICY_VERSION",
+    "MODULE_VALIDATION_EXECUTION_WORKFLOW_POLICY_VERSION",
     "RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION",
 ]

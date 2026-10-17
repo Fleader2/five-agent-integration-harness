@@ -82,7 +82,11 @@ facts only, never a treatment decision or a fabricated value), and
 `docs/18_workbench_module_calibration_contract.md` (calibrating one accepted hierarchy
 module's own standalone executable artifact through Agent 2, Agent 3, then Agent 4 against
 Workbench-supplied experimental data, returning Agent 3's/Agent 4's own full, verbatim reports
-rather than a compressed scoring-oriented mapping).
+rather than a compressed scoring-oriented mapping), and
+`docs/19_workbench_module_validation_contract.md` (validating one already-calibrated
+module's own frozen parameter estimates through Agent 2 then Agent 5 against independent
+held-out data and recommending follow-up experiments -- Agent 3/Agent 4 are never re-invoked;
+a prior, already-succeeded calibration's own report is reused as-is).
 
 ## Recursive Module Evaluation Orchestration
 
