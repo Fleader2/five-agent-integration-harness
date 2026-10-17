@@ -175,6 +175,7 @@ def _execute(
             recursive_search_stopping_reason=n.recursive_search_stopping_reason,
             recursive_search_rounds=n.recursive_search_rounds,
             recursive_search_policy_version=n.recursive_search_policy_version,
+            attach_payload=n.attach_payload,
         )
         for n in result.nodes
     )

@@ -73,7 +73,9 @@ workflow above, but a single Automatic Hierarchical Recursive Modularization sea
 model Agent 2 already assembled, with its own versioned request/result contract
 (`WorkbenchHierarchicalInvocationRequest`/`WorkbenchHierarchicalRunResult`), the identical
 idempotent-replay/pre-flight-rejection discipline, and a full per-node result set the Workbench
-persists as a first-class record. See `docs/15_workbench_hierarchical_recursion_contract.md`.
+persists as a first-class record. See `docs/15_workbench_hierarchical_recursion_contract.md`
+(resume) and `docs/16_workbench_module_simulation_contract.md` (simulating one accepted
+hierarchy module directly through Agent 2 then Agent 3, never the whole root model).
 
 ## Recursive Module Evaluation Orchestration
 

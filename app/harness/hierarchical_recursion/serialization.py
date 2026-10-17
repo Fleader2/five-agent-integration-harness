@@ -52,6 +52,7 @@ def serialize_node_record(node: HierarchyNodeRecord) -> dict[str, Any]:
         "recursive_search_stopping_reason": node.recursive_search_stopping_reason,
         "recursive_search_rounds": node.recursive_search_rounds,
         "recursive_search_policy_version": node.recursive_search_policy_version,
+        "attach_payload": node.attach_payload,
     }
 
 
@@ -86,6 +87,7 @@ def deserialize_node_record(data: dict[str, Any]) -> HierarchyNodeRecord:
         recursive_search_stopping_reason=data["recursive_search_stopping_reason"],
         recursive_search_rounds=data["recursive_search_rounds"],
         recursive_search_policy_version=data["recursive_search_policy_version"],
+        attach_payload=data.get("attach_payload"),
     )
 
 

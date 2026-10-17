@@ -135,6 +135,18 @@ class HierarchyNodeRecord:
     recursive_search_stopping_reason: str
     recursive_search_rounds: int
     recursive_search_policy_version: str
+    #: Executable-Module Materialization increment: the exact ``{"modularization_id",
+    #: "module_ids", "memberships"}`` payload that was used to materialize *this* node's own
+    #: submodel -- ``None`` only for the root node (depth 0, which searches the whole canonical
+    #: model directly, no attach needed) and for a rejected-by-human-review node (never
+    #: searched at all). Component ids inside ``memberships`` are always real, whole-network
+    #: ids (never renamed/rehashed by submodel materialization), so this single payload is
+    #: always sufficient to re-materialize this exact node's own submodel later by attaching it
+    #: directly to a freshly-rebuilt *root* model -- no need to replay the full root-to-node
+    #: attach chain. Carried here purely so a caller (the Workbench) can persist it and later
+    #: re-request this specific module's own executable artifact without this harness needing
+    #: to re-run (or even remember) the search that originally produced it.
+    attach_payload: dict[str, Any] | None
 
 
 @dataclass(frozen=True, slots=True)

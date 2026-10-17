@@ -264,6 +264,12 @@ CONTRACT_VERSION_MATRIX: tuple[tuple[str, str, str], ...] = (
 #: evidence).
 MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION = "module-calibration-workflow-v2"
 
+#: Executable-Module Materialization increment -- the version of
+#: ``app.harness.module_simulation``'s own request/result shape (routing one accepted
+#: hierarchy module's own ``attach_payload`` through Agent 2's existing ``build_module
+#: _calibration_request`` materialization path, then unchanged Agent 3 simulation).
+MODULE_SIMULATION_WORKFLOW_POLICY_VERSION = "module-simulation-workflow-v1"
+
 #: Recursive Agent-4-Assisted Candidate Search Orchestration increment -- the version of
 #: ``app.harness.recursive_candidate_search``'s own policy (the recursive-loop stopping rules,
 #: the calibration-evidence cache-key shape, the Agent2-round subprocess contract this harness
@@ -317,5 +323,6 @@ __all__ = [
     "HIERARCHICAL_RECURSION_CHECKPOINT_VERSION",
     "HIERARCHICAL_RECURSION_POLICY_VERSION",
     "MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION",
+    "MODULE_SIMULATION_WORKFLOW_POLICY_VERSION",
     "RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION",
 ]

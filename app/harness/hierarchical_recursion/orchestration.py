@@ -182,6 +182,7 @@ def _run_recursion(
         recursive_search_stopping_reason: str,
         recursive_search_rounds: int,
         recursive_search_policy_version: str,
+        attach_payload: dict[str, Any] | None,
     ) -> None:
         nodes.append(
             HierarchyNodeRecord(
@@ -205,6 +206,7 @@ def _run_recursion(
                 recursive_search_stopping_reason=recursive_search_stopping_reason,
                 recursive_search_rounds=recursive_search_rounds,
                 recursive_search_policy_version=recursive_search_policy_version,
+                attach_payload=attach_payload,
             )
         )
 
@@ -236,6 +238,7 @@ def _run_recursion(
                 recursive_search_stopping_reason="",
                 recursive_search_rounds=0,
                 recursive_search_policy_version="",
+                attach_payload=attach_modularization,
             )
             return
 
@@ -269,6 +272,7 @@ def _run_recursion(
                     recursive_search_stopping_reason="",
                     recursive_search_rounds=0,
                     recursive_search_policy_version="",
+                    attach_payload=attach_modularization,
                 )
                 return
 
@@ -346,6 +350,7 @@ def _run_recursion(
                 recursive_search_stopping_reason=result.stopping_reason.value,
                 recursive_search_rounds=len(result.rounds),
                 recursive_search_policy_version=result.policy_version,
+                attach_payload=attach_modularization,
             )
             return
 
@@ -420,6 +425,7 @@ def _run_recursion(
             recursive_search_stopping_reason=result.stopping_reason.value,
             recursive_search_rounds=len(result.rounds),
             recursive_search_policy_version=result.policy_version,
+            attach_payload=attach_modularization,
         )
 
         for mid in too_small_modules:
@@ -444,6 +450,10 @@ def _run_recursion(
                 recursive_search_stopping_reason="",
                 recursive_search_rounds=0,
                 recursive_search_policy_version="",
+                # Never materialized (too small to even attempt) -- never a candidate for
+                # ModelModule creation (Executable-Module Materialization increment requires
+                # accepted=True), so no attach_payload is needed here.
+                attach_payload=None,
             )
 
         if not should_descend:
@@ -836,6 +846,9 @@ def resume_hierarchical_recursive_modularization(
                     recursive_search_stopping_reason="",
                     recursive_search_rounds=0,
                     recursive_search_policy_version="",
+                    # Never materialized/searched (rejected outright) -- never a candidate for
+                    # ModelModule creation, so no attach_payload is needed here.
+                    attach_payload=None,
                 )
             )
             continue

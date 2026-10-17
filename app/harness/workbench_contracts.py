@@ -66,6 +66,12 @@ class WorkbenchRunErrorCode(StrEnum):
     #: ``HierarchicalRecursionCheckpointError`` -- a malformed, version-mismatched/stale, or
     #: decision-incomplete checkpoint, passed through as this error's own ``message`` verbatim.
     CHECKPOINT_REJECTED = "CHECKPOINT_REJECTED"
+    #: Executable-Module Materialization increment:
+    #: ``app.harness.module_simulation.ModuleSimulationWorkflowError`` -- a malformed request,
+    #: an Agent 2/Agent 3 subprocess failure, or (most commonly) the target module having no
+    #: eligible standalone executable artifact -- a genuine, disclosed "this module cannot be
+    #: simulated" outcome, never silently accepted.
+    MODULE_SIMULATION_FAILED = "MODULE_SIMULATION_FAILED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,6 +294,12 @@ class WorkbenchHierarchyNodeSummary:
     recursive_search_stopping_reason: str
     recursive_search_rounds: int
     recursive_search_policy_version: str
+    #: Executable-Module Materialization increment: the exact payload that was used to
+    #: materialize *this* node's own submodel (``None`` for the root node and for a node never
+    #: actually searched) -- see ``HierarchyNodeRecord.attach_payload``'s own docstring. The
+    #: Workbench stores this verbatim and later passes it back, unchanged, to request an Agent
+    #: 3 simulation against exactly this module's own executable artifact.
+    attach_payload: dict | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -379,6 +391,7 @@ def hierarchical_result_to_dict(result: WorkbenchHierarchicalRunResult) -> dict:
                 "recursive_search_stopping_reason": n.recursive_search_stopping_reason,
                 "recursive_search_rounds": n.recursive_search_rounds,
                 "recursive_search_policy_version": n.recursive_search_policy_version,
+                "attach_payload": n.attach_payload,
             }
             for n in result.nodes
         ],
@@ -441,6 +454,7 @@ def hierarchical_result_from_dict(data: dict) -> WorkbenchHierarchicalRunResult:
                 recursive_search_stopping_reason=n["recursive_search_stopping_reason"],
                 recursive_search_rounds=n["recursive_search_rounds"],
                 recursive_search_policy_version=n["recursive_search_policy_version"],
+                attach_payload=n.get("attach_payload"),
             )
             for n in data.get("nodes", ())
         ),
@@ -519,16 +533,170 @@ def hierarchical_resume_request_from_dict(data: dict) -> WorkbenchHierarchicalRe
     )
 
 
+#: Executable-Module Materialization increment -- a third, genuinely separate contract from
+#: both the initial hierarchical-recursion invocation and its resume: this one names simulating
+#: one already-accepted hierarchy module (not the whole root model) through Agent 2 then Agent
+#: 3. Deliberately its own version.
+WORKBENCH_MODULE_SIMULATION_CONTRACT_VERSION = "workbench-module-simulation-v1"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModuleSimulationRequest:
+    """What the Workbench sends to ask the harness to simulate one accepted hierarchy module.
+
+    ``attach_payload`` is the Workbench's own stored, verbatim-opaque copy of a prior
+    ``WorkbenchHierarchyNodeSummary.attach_payload`` -- passed back here unchanged, never
+    reconstructed or edited; it is this one payload (never a multi-level chain) that lets the
+    canonical entrypoint re-materialize exactly this module's own standalone executable
+    artifact from a freshly-rebuilt root model. ``module_id`` names the specific module within
+    it to simulate. Exactly one of ``agent1_organism_id`` or
+    ``input_artifact_references["stage1_synthetic_source"]`` must be set, mirroring every other
+    contract in this family's identical requirement.
+    """
+
+    contract_version: str
+    run_id: str
+    project_id: str
+    subproject_id: str
+    attach_payload: dict
+    module_id: str
+    agent1_organism_id: str | None = None
+    input_artifact_references: dict[str, str] = field(default_factory=dict)
+    correlation_id: str | None = None
+    notes: str | None = None
+    submitted_at: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModuleSimulationResult:
+    """What the harness reports back for one ``WorkbenchModuleSimulationRequest``."""
+
+    contract_version: str
+    run_id: str
+    status: WorkbenchRunStatus
+    module_id: str | None
+    modularization_id: str | None
+    #: ``{"model_id", "species_count", "reaction_count", "parameter_count"}`` -- enough to
+    #: confirm the *module's own* filtered artifact (not the root model's) was what Agent 3
+    #: actually simulated, without the Workbench needing to parse the full handoff.
+    module_handoff_summary: dict | None
+    #: Agent 3's own full ``Agent3Report`` dict, read verbatim -- never reshaped or
+    #: reinterpreted here.
+    agent3_report: dict | None
+    started_at: str | None
+    completed_at: str | None
+    error: WorkbenchRunError | None
+    summary: str
+    warnings: tuple[str, ...] = ()
+    replayed: bool = False
+
+
+def module_simulation_request_to_dict(request: WorkbenchModuleSimulationRequest) -> dict:
+    """Serialize a ``WorkbenchModuleSimulationRequest`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": request.contract_version,
+        "run_id": request.run_id,
+        "project_id": request.project_id,
+        "subproject_id": request.subproject_id,
+        "attach_payload": dict(request.attach_payload),
+        "module_id": request.module_id,
+        "agent1_organism_id": request.agent1_organism_id,
+        "input_artifact_references": dict(request.input_artifact_references),
+        "correlation_id": request.correlation_id,
+        "notes": request.notes,
+        "submitted_at": request.submitted_at,
+    }
+
+
+def module_simulation_request_from_dict(data: dict) -> WorkbenchModuleSimulationRequest:
+    """Parse a plain dict into a ``WorkbenchModuleSimulationRequest``. Raises
+    ``KeyError``/``TypeError`` on a malformed request -- the canonical entrypoint catches these
+    and reports ``WorkbenchRunErrorCode.MALFORMED_REQUEST``, never a traceback."""
+    return WorkbenchModuleSimulationRequest(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        project_id=data["project_id"],
+        subproject_id=data["subproject_id"],
+        attach_payload=dict(data["attach_payload"]),
+        module_id=data["module_id"],
+        agent1_organism_id=data.get("agent1_organism_id"),
+        input_artifact_references=dict(data.get("input_artifact_references") or {}),
+        correlation_id=data.get("correlation_id"),
+        notes=data.get("notes"),
+        submitted_at=data.get("submitted_at"),
+    )
+
+
+def module_simulation_result_to_dict(result: WorkbenchModuleSimulationResult) -> dict:
+    """Serialize a ``WorkbenchModuleSimulationResult`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": result.contract_version,
+        "run_id": result.run_id,
+        "status": result.status.value,
+        "module_id": result.module_id,
+        "modularization_id": result.modularization_id,
+        "module_handoff_summary": result.module_handoff_summary,
+        "agent3_report": result.agent3_report,
+        "started_at": result.started_at,
+        "completed_at": result.completed_at,
+        "error": (
+            None
+            if result.error is None
+            else {
+                "code": result.error.code,
+                "message": result.error.message,
+                "stage_name": result.error.stage_name,
+            }
+        ),
+        "summary": result.summary,
+        "warnings": list(result.warnings),
+        "replayed": result.replayed,
+    }
+
+
+def module_simulation_result_from_dict(data: dict) -> WorkbenchModuleSimulationResult:
+    """The inverse of ``module_simulation_result_to_dict`` -- used to load a cached result for
+    replay."""
+    error_data = data.get("error")
+    error = (
+        None
+        if error_data is None
+        else WorkbenchRunError(
+            code=error_data["code"],
+            message=error_data["message"],
+            stage_name=error_data.get("stage_name"),
+        )
+    )
+    return WorkbenchModuleSimulationResult(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        status=WorkbenchRunStatus(data["status"]),
+        module_id=data.get("module_id"),
+        modularization_id=data.get("modularization_id"),
+        module_handoff_summary=data.get("module_handoff_summary"),
+        agent3_report=data.get("agent3_report"),
+        started_at=data.get("started_at"),
+        completed_at=data.get("completed_at"),
+        error=error,
+        summary=data.get("summary", ""),
+        warnings=tuple(data.get("warnings", ())),
+        replayed=bool(data.get("replayed", False)),
+    )
+
+
 __all__ = [
     "SUPPORTED_ENTRY_STAGE",
     "WORKBENCH_HARNESS_CONTRACT_VERSION",
     "WORKBENCH_HIERARCHICAL_CONTRACT_VERSION",
     "WORKBENCH_HIERARCHICAL_RESUME_CONTRACT_VERSION",
+    "WORKBENCH_MODULE_SIMULATION_CONTRACT_VERSION",
     "WorkbenchHierarchicalInvocationRequest",
     "WorkbenchHierarchicalResumeRequest",
     "WorkbenchHierarchicalRunResult",
     "WorkbenchHierarchyNodeSummary",
     "WorkbenchInvocationRequest",
+    "WorkbenchModuleSimulationRequest",
+    "WorkbenchModuleSimulationResult",
     "WorkbenchRunError",
     "WorkbenchRunErrorCode",
     "WorkbenchRunResult",
@@ -538,6 +706,10 @@ __all__ = [
     "hierarchical_result_to_dict",
     "hierarchical_resume_request_from_dict",
     "hierarchical_resume_request_to_dict",
+    "module_simulation_request_from_dict",
+    "module_simulation_request_to_dict",
+    "module_simulation_result_from_dict",
+    "module_simulation_result_to_dict",
     "request_from_dict",
     "result_from_dict",
     "result_to_dict",
