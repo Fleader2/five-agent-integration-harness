@@ -72,6 +72,12 @@ class WorkbenchRunErrorCode(StrEnum):
     #: eligible standalone executable artifact -- a genuine, disclosed "this module cannot be
     #: simulated" outcome, never silently accepted.
     MODULE_SIMULATION_FAILED = "MODULE_SIMULATION_FAILED"
+    #: Boundary-Condition Semantics increment:
+    #: ``app.harness.module_boundary_derivation.ModuleBoundaryDerivationWorkflowError`` -- a
+    #: malformed request or an Agent 2 subprocess failure. Never produced for an empty
+    #: candidate list (a module with no cross-boundary species is a genuine, disclosed
+    #: outcome, not a failure).
+    MODULE_BOUNDARY_DERIVATION_FAILED = "MODULE_BOUNDARY_DERIVATION_FAILED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -684,17 +690,167 @@ def module_simulation_result_from_dict(data: dict) -> WorkbenchModuleSimulationR
     )
 
 
+#: Boundary-Condition Semantics increment -- a fourth, genuinely separate contract: this one
+#: names deriving *candidate* boundary species for one already-accepted hierarchy module from
+#: Agent 2's own reaction-participant topology -- never a treatment decision, never a
+#: simulation. Deliberately its own version.
+WORKBENCH_MODULE_BOUNDARY_DERIVATION_CONTRACT_VERSION = "workbench-module-boundary-derivation-v1"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModuleBoundaryDerivationRequest:
+    """What the Workbench sends to ask the harness to derive candidate boundary species for one
+    accepted hierarchy module.
+
+    ``attach_payload`` is the Workbench's own stored, verbatim-opaque copy of a prior
+    ``WorkbenchHierarchyNodeSummary.attach_payload`` -- passed back here unchanged, mirroring
+    ``WorkbenchModuleSimulationRequest``'s own identical field exactly. ``module_id`` names the
+    specific module within it to derive boundary candidates for.
+    """
+
+    contract_version: str
+    run_id: str
+    project_id: str
+    subproject_id: str
+    attach_payload: dict
+    module_id: str
+    agent1_organism_id: str | None = None
+    input_artifact_references: dict[str, str] = field(default_factory=dict)
+    correlation_id: str | None = None
+    notes: str | None = None
+    submitted_at: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModuleBoundaryDerivationResult:
+    """What the harness reports back for one ``WorkbenchModuleBoundaryDerivationRequest``."""
+
+    contract_version: str
+    run_id: str
+    status: WorkbenchRunStatus
+    module_id: str | None
+    #: ``[{"species_id", "direction"}, ...]`` -- structural candidates only, never a treatment
+    #: decision or a fabricated value.
+    candidates: tuple[dict, ...]
+    started_at: str | None
+    completed_at: str | None
+    error: WorkbenchRunError | None
+    summary: str
+    warnings: tuple[str, ...] = ()
+    replayed: bool = False
+
+
+def module_boundary_derivation_request_to_dict(
+    request: WorkbenchModuleBoundaryDerivationRequest,
+) -> dict:
+    """Serialize a ``WorkbenchModuleBoundaryDerivationRequest`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": request.contract_version,
+        "run_id": request.run_id,
+        "project_id": request.project_id,
+        "subproject_id": request.subproject_id,
+        "attach_payload": dict(request.attach_payload),
+        "module_id": request.module_id,
+        "agent1_organism_id": request.agent1_organism_id,
+        "input_artifact_references": dict(request.input_artifact_references),
+        "correlation_id": request.correlation_id,
+        "notes": request.notes,
+        "submitted_at": request.submitted_at,
+    }
+
+
+def module_boundary_derivation_request_from_dict(
+    data: dict,
+) -> WorkbenchModuleBoundaryDerivationRequest:
+    """Parse a plain dict into a ``WorkbenchModuleBoundaryDerivationRequest``. Raises
+    ``KeyError``/``TypeError`` on a malformed request -- the canonical entrypoint catches these
+    and reports ``WorkbenchRunErrorCode.MALFORMED_REQUEST``, never a traceback."""
+    return WorkbenchModuleBoundaryDerivationRequest(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        project_id=data["project_id"],
+        subproject_id=data["subproject_id"],
+        attach_payload=dict(data["attach_payload"]),
+        module_id=data["module_id"],
+        agent1_organism_id=data.get("agent1_organism_id"),
+        input_artifact_references=dict(data.get("input_artifact_references") or {}),
+        correlation_id=data.get("correlation_id"),
+        notes=data.get("notes"),
+        submitted_at=data.get("submitted_at"),
+    )
+
+
+def module_boundary_derivation_result_to_dict(
+    result: WorkbenchModuleBoundaryDerivationResult,
+) -> dict:
+    """Serialize a ``WorkbenchModuleBoundaryDerivationResult`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": result.contract_version,
+        "run_id": result.run_id,
+        "status": result.status.value,
+        "module_id": result.module_id,
+        "candidates": list(result.candidates),
+        "started_at": result.started_at,
+        "completed_at": result.completed_at,
+        "error": (
+            None
+            if result.error is None
+            else {
+                "code": result.error.code,
+                "message": result.error.message,
+                "stage_name": result.error.stage_name,
+            }
+        ),
+        "summary": result.summary,
+        "warnings": list(result.warnings),
+        "replayed": result.replayed,
+    }
+
+
+def module_boundary_derivation_result_from_dict(
+    data: dict,
+) -> WorkbenchModuleBoundaryDerivationResult:
+    """The inverse of ``module_boundary_derivation_result_to_dict`` -- used to load a cached
+    result for replay."""
+    error_data = data.get("error")
+    error = (
+        None
+        if error_data is None
+        else WorkbenchRunError(
+            code=error_data["code"],
+            message=error_data["message"],
+            stage_name=error_data.get("stage_name"),
+        )
+    )
+    return WorkbenchModuleBoundaryDerivationResult(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        status=WorkbenchRunStatus(data["status"]),
+        module_id=data.get("module_id"),
+        candidates=tuple(data.get("candidates", ())),
+        started_at=data.get("started_at"),
+        completed_at=data.get("completed_at"),
+        error=error,
+        summary=data.get("summary", ""),
+        warnings=tuple(data.get("warnings", ())),
+        replayed=bool(data.get("replayed", False)),
+    )
+
+
 __all__ = [
     "SUPPORTED_ENTRY_STAGE",
     "WORKBENCH_HARNESS_CONTRACT_VERSION",
     "WORKBENCH_HIERARCHICAL_CONTRACT_VERSION",
     "WORKBENCH_HIERARCHICAL_RESUME_CONTRACT_VERSION",
+    "WORKBENCH_MODULE_BOUNDARY_DERIVATION_CONTRACT_VERSION",
     "WORKBENCH_MODULE_SIMULATION_CONTRACT_VERSION",
     "WorkbenchHierarchicalInvocationRequest",
     "WorkbenchHierarchicalResumeRequest",
     "WorkbenchHierarchicalRunResult",
     "WorkbenchHierarchyNodeSummary",
     "WorkbenchInvocationRequest",
+    "WorkbenchModuleBoundaryDerivationRequest",
+    "WorkbenchModuleBoundaryDerivationResult",
     "WorkbenchModuleSimulationRequest",
     "WorkbenchModuleSimulationResult",
     "WorkbenchRunError",
@@ -706,6 +862,10 @@ __all__ = [
     "hierarchical_result_to_dict",
     "hierarchical_resume_request_from_dict",
     "hierarchical_resume_request_to_dict",
+    "module_boundary_derivation_request_from_dict",
+    "module_boundary_derivation_request_to_dict",
+    "module_boundary_derivation_result_from_dict",
+    "module_boundary_derivation_result_to_dict",
     "module_simulation_request_from_dict",
     "module_simulation_request_to_dict",
     "module_simulation_result_from_dict",

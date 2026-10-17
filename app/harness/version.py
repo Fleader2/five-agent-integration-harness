@@ -305,6 +305,15 @@ HIERARCHICAL_RECURSION_POLICY_VERSION = "hierarchical-recursion-v1"
 #: clearly on malformed, mismatched, or stale state" possible at all.
 HIERARCHICAL_RECURSION_CHECKPOINT_VERSION = "hierarchical-recursion-checkpoint-v1"
 
+#: Boundary-Condition Semantics increment -- the version of
+#: ``app.harness.module_boundary_derivation``'s own request/result shape and the structural
+#: boundary-candidate algorithm ``run_agent2_derive_boundary_candidates.py`` applies (which
+#: species are boundary candidates of a target module, and how INPUT/OUTPUT/INPUT_OUTPUT
+#: direction is derived from internal participant roles). Reports structural candidates only --
+#: never a treatment decision, never baked into any calibration/functional-evaluation cache key,
+#: since it answers a different question than either of those.
+MODULE_BOUNDARY_DERIVATION_WORKFLOW_POLICY_VERSION = "module-boundary-derivation-workflow-v1"
+
 __all__ = [
     "AGENT1_CONTRACT_VERSION",
     "AGENT2_BUILD_REQUEST_CONTRACT_VERSION",
@@ -322,6 +331,7 @@ __all__ = [
     "HARNESS_CONTRACT_VERSION",
     "HIERARCHICAL_RECURSION_CHECKPOINT_VERSION",
     "HIERARCHICAL_RECURSION_POLICY_VERSION",
+    "MODULE_BOUNDARY_DERIVATION_WORKFLOW_POLICY_VERSION",
     "MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION",
     "MODULE_SIMULATION_WORKFLOW_POLICY_VERSION",
     "RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION",
