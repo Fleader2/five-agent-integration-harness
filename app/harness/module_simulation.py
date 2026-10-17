@@ -37,30 +37,33 @@ class ModuleSimulationWorkflowError(ValueError):
     """
 
 
-def run_module_simulation_workflow(
+def materialize_module_handoff(
     request: dict[str, Any], *, stage_dir: str | Path, timeout_seconds: float = 300.0
 ) -> dict[str, Any]:
-    """Route ``request`` through Agent 2 (materialize this module's own standalone executable
-    artifact) then Agent 3 (simulate it), and return Agent 3's own ``Agent3Report`` dict.
+    """Materialize one accepted hierarchy module's own standalone Agent2->Agent3 handoff dict
+    via Agent 2's own ``run_agent2_materialize_module_handoff.py`` runner -- the shared first
+    stage both ``run_module_simulation_workflow`` (below) and ``app.harness
+    .module_calibration_execution.run_module_calibration_execution_workflow`` need. Extracted
+    here (Boundary-Condition-Semantics-adjacent Module-Level Agent4 Calibration increment) so
+    this materialization glue is written once, not duplicated between the two downstream
+    consumers -- never a new Agent 2 algorithm, purely the same subprocess invocation this
+    function already performed inline before.
 
-    ``request`` keys: ``run_id``, ``agent1_view_path``, ``attach_payload`` (the exact
+    ``request`` keys: ``agent1_view_path``, ``attach_payload`` (the exact
     ``{"modularization_id", "module_ids", "memberships"}`` dict that materializes the target
-    module -- always a harness-reported ``HierarchyNodeRecord.attach_payload``, never invented
-    here), ``module_id`` (the target module within ``attach_payload``), ``correlation_id``, and
-    optionally ``build_request_path``.
+    module, optionally with a ``"module_ports"`` entry -- always a harness-reported
+    ``HierarchyNodeRecord.attach_payload``, never invented here), ``module_id`` (the target
+    module within ``attach_payload``), ``correlation_id``, ``run_id``, and optionally
+    ``build_request_path``.
 
-    **Persistence/replay**: the result is written to ``<stage_dir>/module_simulation_result_
-    <run_id>.json``; a second call with the identical ``run_id`` reads that file back verbatim
-    rather than re-invoking either agent -- mirrors ``run_module_calibration_workflow``'s own
-    established replay pattern exactly.
+    Raises ``ModuleSimulationWorkflowError`` on a genuine infrastructure failure or a
+    disclosed-but-fatal ``ModuleCalibrationReferenceError`` (the target module has no eligible
+    standalone artifact) -- either way, there is no module_handoff for a caller to do anything
+    with, so this is raised, never silently returned as a partial/empty result.
     """
     stage_dir = Path(stage_dir)
     stage_dir.mkdir(parents=True, exist_ok=True)
     run_id = request["run_id"]
-    result_path = stage_dir / f"module_simulation_result_{run_id}.json"
-    if result_path.is_file():
-        with open(result_path) as f:
-            return json.load(f)
 
     attach_path = stage_dir / f"module_simulation_attach_{run_id}.json"
     with open(attach_path, "w") as f:
@@ -103,7 +106,38 @@ def run_module_simulation_workflow(
             f"{outcome2.stderr[-500:]!r}"
         )
     with open(module_handoff_path) as f:
-        module_handoff = json.load(f)
+        return json.load(f)
+
+
+def run_module_simulation_workflow(
+    request: dict[str, Any], *, stage_dir: str | Path, timeout_seconds: float = 300.0
+) -> dict[str, Any]:
+    """Route ``request`` through Agent 2 (materialize this module's own standalone executable
+    artifact) then Agent 3 (simulate it), and return Agent 3's own ``Agent3Report`` dict.
+
+    ``request`` keys: ``run_id``, ``agent1_view_path``, ``attach_payload`` (the exact
+    ``{"modularization_id", "module_ids", "memberships"}`` dict that materializes the target
+    module -- always a harness-reported ``HierarchyNodeRecord.attach_payload``, never invented
+    here), ``module_id`` (the target module within ``attach_payload``), ``correlation_id``, and
+    optionally ``build_request_path``.
+
+    **Persistence/replay**: the result is written to ``<stage_dir>/module_simulation_result_
+    <run_id>.json``; a second call with the identical ``run_id`` reads that file back verbatim
+    rather than re-invoking either agent -- mirrors ``run_module_calibration_workflow``'s own
+    established replay pattern exactly.
+    """
+    stage_dir = Path(stage_dir)
+    stage_dir.mkdir(parents=True, exist_ok=True)
+    run_id = request["run_id"]
+    result_path = stage_dir / f"module_simulation_result_{run_id}.json"
+    if result_path.is_file():
+        with open(result_path) as f:
+            return json.load(f)
+
+    module_handoff = materialize_module_handoff(
+        request, stage_dir=stage_dir, timeout_seconds=timeout_seconds
+    )
+    module_handoff_path = stage_dir / f"module_simulation_handoff_{run_id}.json"
 
     agent3_output_path = stage_dir / f"module_simulation_agent3_output_{run_id}.json"
     outcome3 = run_stage_subprocess(
@@ -144,5 +178,6 @@ def run_module_simulation_workflow(
 __all__ = [
     "MODULE_SIMULATION_WORKFLOW_POLICY_VERSION",
     "ModuleSimulationWorkflowError",
+    "materialize_module_handoff",
     "run_module_simulation_workflow",
 ]

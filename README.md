@@ -78,7 +78,11 @@ persists as a first-class record. See `docs/15_workbench_hierarchical_recursion_
 hierarchy module directly through Agent 2 then Agent 3, never the whole root model), and
 `docs/17_workbench_module_boundary_derivation_contract.md` (deriving candidate boundary
 species for one accepted hierarchy module from Agent 2's own reaction topology -- structural
-facts only, never a treatment decision or a fabricated value).
+facts only, never a treatment decision or a fabricated value), and
+`docs/18_workbench_module_calibration_contract.md` (calibrating one accepted hierarchy
+module's own standalone executable artifact through Agent 2, Agent 3, then Agent 4 against
+Workbench-supplied experimental data, returning Agent 3's/Agent 4's own full, verbatim reports
+rather than a compressed scoring-oriented mapping).
 
 ## Recursive Module Evaluation Orchestration
 

@@ -314,6 +314,17 @@ HIERARCHICAL_RECURSION_CHECKPOINT_VERSION = "hierarchical-recursion-checkpoint-v
 #: since it answers a different question than either of those.
 MODULE_BOUNDARY_DERIVATION_WORKFLOW_POLICY_VERSION = "module-boundary-derivation-workflow-v1"
 
+#: Module-Level Agent4 Calibration with Immutable Execution-Condition Provenance increment --
+#: the version of ``app.harness.module_calibration_execution``'s own request/result shape
+#: (routing one accepted hierarchy module's own resolved ``attach_payload`` through Agent 2
+#: materialization, then unchanged Agent 3, then unchanged Agent 4, returning the full,
+#: verbatim ``agent3_report``/``agent4_report`` dicts rather than ``app.harness
+#: .module_calibration``'s own compressed ``ModuleCalibrationEvaluation`` mapping -- a
+#: genuinely different consumer (a Workbench end user wanting full calibration provenance, not
+#: the recursive hierarchy search's own scoring heuristic), so this is a separate module, never
+#: a change to ``module_calibration.py``'s own contract or behavior).
+MODULE_CALIBRATION_EXECUTION_WORKFLOW_POLICY_VERSION = "module-calibration-execution-workflow-v1"
+
 __all__ = [
     "AGENT1_CONTRACT_VERSION",
     "AGENT2_BUILD_REQUEST_CONTRACT_VERSION",
@@ -332,6 +343,7 @@ __all__ = [
     "HIERARCHICAL_RECURSION_CHECKPOINT_VERSION",
     "HIERARCHICAL_RECURSION_POLICY_VERSION",
     "MODULE_BOUNDARY_DERIVATION_WORKFLOW_POLICY_VERSION",
+    "MODULE_CALIBRATION_EXECUTION_WORKFLOW_POLICY_VERSION",
     "MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION",
     "MODULE_SIMULATION_WORKFLOW_POLICY_VERSION",
     "RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION",

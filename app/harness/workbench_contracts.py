@@ -78,6 +78,14 @@ class WorkbenchRunErrorCode(StrEnum):
     #: candidate list (a module with no cross-boundary species is a genuine, disclosed
     #: outcome, not a failure).
     MODULE_BOUNDARY_DERIVATION_FAILED = "MODULE_BOUNDARY_DERIVATION_FAILED"
+    #: Module-Level Agent4 Calibration increment:
+    #: ``app.harness.module_calibration_execution.ModuleCalibrationExecutionWorkflowError`` --
+    #: a malformed request, a calibration target/observation naming a parameter/species the
+    #: materialized module does not have, the target module having no eligible standalone
+    #: executable artifact, or an Agent 2/Agent 3/Agent 4 subprocess failure. Never produced
+    #: for a real, disclosed Agent 4 calibration outcome (SUCCESS/PARTIAL_SUCCESS/
+    #: OPTIMIZATION_FAILED/etc. are all carried through in the result's own ``agent4_report``).
+    MODULE_CALIBRATION_EXECUTION_FAILED = "MODULE_CALIBRATION_EXECUTION_FAILED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -837,12 +845,173 @@ def module_boundary_derivation_result_from_dict(
     )
 
 
+#: Module-Level Agent4 Calibration increment -- a fifth, genuinely separate contract: this one
+#: names calibrating one already-accepted hierarchy module's own standalone executable
+#: artifact through Agent 2, Agent 3, then Agent 4 against Workbench-supplied experimental
+#: data -- never the whole root model, never Agent 2/3/4 code changed. Deliberately its own
+#: version.
+WORKBENCH_MODULE_CALIBRATION_CONTRACT_VERSION = "workbench-module-calibration-v1"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModuleCalibrationRequest:
+    """What the Workbench sends to ask the harness to calibrate one accepted hierarchy module.
+
+    ``attach_payload`` is the Workbench's own stored, verbatim-opaque copy of a prior
+    ``WorkbenchHierarchyNodeSummary.attach_payload``, with the module's own resolved boundary
+    ports already merged in as ``module_ports`` -- passed back here unchanged, mirroring
+    ``WorkbenchModuleSimulationRequest``'s own identical field exactly. ``calibration_request``
+    is Agent 4's own ``CalibrationRequest`` dict shape (``targets``/``observations``/
+    ``optimizer``/...), built and validated entirely by the Workbench -- never reshaped here.
+    """
+
+    contract_version: str
+    run_id: str
+    project_id: str
+    subproject_id: str
+    attach_payload: dict
+    module_id: str
+    calibration_request: dict
+    agent1_organism_id: str | None = None
+    input_artifact_references: dict[str, str] = field(default_factory=dict)
+    correlation_id: str | None = None
+    notes: str | None = None
+    submitted_at: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModuleCalibrationResult:
+    """What the harness reports back for one ``WorkbenchModuleCalibrationRequest``."""
+
+    contract_version: str
+    run_id: str
+    status: WorkbenchRunStatus
+    module_id: str | None
+    modularization_id: str | None
+    #: The full, materialized Agent2->Agent3 handoff dict (species/reactions/kinetic_laws/
+    #: parameters/antimony_text), never a bare summary -- the Workbench's own immutable
+    #: execution-snapshot persistence needs real parameter/initial-condition fidelity, not
+    #: just counts.
+    module_handoff: dict | None
+    #: Agent 3's own full ``Agent3Report`` dict, read verbatim.
+    agent3_report: dict | None
+    #: Agent 4's own full ``Agent4Report`` dict, read verbatim -- including every
+    #: ``parameter_estimates``/``residuals``/``identifiability_findings`` entry, never
+    #: compressed down the way ``app.harness.module_calibration``'s own
+    #: ``ModuleCalibrationEvaluation`` mapping does for its own, different consumer.
+    agent4_report: dict | None
+    started_at: str | None
+    completed_at: str | None
+    error: WorkbenchRunError | None
+    summary: str
+    warnings: tuple[str, ...] = ()
+    replayed: bool = False
+
+
+def module_calibration_request_to_dict(request: WorkbenchModuleCalibrationRequest) -> dict:
+    """Serialize a ``WorkbenchModuleCalibrationRequest`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": request.contract_version,
+        "run_id": request.run_id,
+        "project_id": request.project_id,
+        "subproject_id": request.subproject_id,
+        "attach_payload": dict(request.attach_payload),
+        "module_id": request.module_id,
+        "calibration_request": dict(request.calibration_request),
+        "agent1_organism_id": request.agent1_organism_id,
+        "input_artifact_references": dict(request.input_artifact_references),
+        "correlation_id": request.correlation_id,
+        "notes": request.notes,
+        "submitted_at": request.submitted_at,
+    }
+
+
+def module_calibration_request_from_dict(data: dict) -> WorkbenchModuleCalibrationRequest:
+    """Parse a plain dict into a ``WorkbenchModuleCalibrationRequest``. Raises
+    ``KeyError``/``TypeError`` on a malformed request -- the canonical entrypoint catches these
+    and reports ``WorkbenchRunErrorCode.MALFORMED_REQUEST``, never a traceback."""
+    return WorkbenchModuleCalibrationRequest(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        project_id=data["project_id"],
+        subproject_id=data["subproject_id"],
+        attach_payload=dict(data["attach_payload"]),
+        module_id=data["module_id"],
+        calibration_request=dict(data["calibration_request"]),
+        agent1_organism_id=data.get("agent1_organism_id"),
+        input_artifact_references=dict(data.get("input_artifact_references") or {}),
+        correlation_id=data.get("correlation_id"),
+        notes=data.get("notes"),
+        submitted_at=data.get("submitted_at"),
+    )
+
+
+def module_calibration_result_to_dict(result: WorkbenchModuleCalibrationResult) -> dict:
+    """Serialize a ``WorkbenchModuleCalibrationResult`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": result.contract_version,
+        "run_id": result.run_id,
+        "status": result.status.value,
+        "module_id": result.module_id,
+        "modularization_id": result.modularization_id,
+        "module_handoff": result.module_handoff,
+        "agent3_report": result.agent3_report,
+        "agent4_report": result.agent4_report,
+        "started_at": result.started_at,
+        "completed_at": result.completed_at,
+        "error": (
+            None
+            if result.error is None
+            else {
+                "code": result.error.code,
+                "message": result.error.message,
+                "stage_name": result.error.stage_name,
+            }
+        ),
+        "summary": result.summary,
+        "warnings": list(result.warnings),
+        "replayed": result.replayed,
+    }
+
+
+def module_calibration_result_from_dict(data: dict) -> WorkbenchModuleCalibrationResult:
+    """The inverse of ``module_calibration_result_to_dict`` -- used to load a cached result for
+    replay."""
+    error_data = data.get("error")
+    error = (
+        None
+        if error_data is None
+        else WorkbenchRunError(
+            code=error_data["code"],
+            message=error_data["message"],
+            stage_name=error_data.get("stage_name"),
+        )
+    )
+    return WorkbenchModuleCalibrationResult(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        status=WorkbenchRunStatus(data["status"]),
+        module_id=data.get("module_id"),
+        modularization_id=data.get("modularization_id"),
+        module_handoff=data.get("module_handoff"),
+        agent3_report=data.get("agent3_report"),
+        agent4_report=data.get("agent4_report"),
+        started_at=data.get("started_at"),
+        completed_at=data.get("completed_at"),
+        error=error,
+        summary=data.get("summary", ""),
+        warnings=tuple(data.get("warnings", ())),
+        replayed=bool(data.get("replayed", False)),
+    )
+
+
 __all__ = [
     "SUPPORTED_ENTRY_STAGE",
     "WORKBENCH_HARNESS_CONTRACT_VERSION",
     "WORKBENCH_HIERARCHICAL_CONTRACT_VERSION",
     "WORKBENCH_HIERARCHICAL_RESUME_CONTRACT_VERSION",
     "WORKBENCH_MODULE_BOUNDARY_DERIVATION_CONTRACT_VERSION",
+    "WORKBENCH_MODULE_CALIBRATION_CONTRACT_VERSION",
     "WORKBENCH_MODULE_SIMULATION_CONTRACT_VERSION",
     "WorkbenchHierarchicalInvocationRequest",
     "WorkbenchHierarchicalResumeRequest",
@@ -851,6 +1020,8 @@ __all__ = [
     "WorkbenchInvocationRequest",
     "WorkbenchModuleBoundaryDerivationRequest",
     "WorkbenchModuleBoundaryDerivationResult",
+    "WorkbenchModuleCalibrationRequest",
+    "WorkbenchModuleCalibrationResult",
     "WorkbenchModuleSimulationRequest",
     "WorkbenchModuleSimulationResult",
     "WorkbenchRunError",
@@ -866,6 +1037,10 @@ __all__ = [
     "module_boundary_derivation_request_to_dict",
     "module_boundary_derivation_result_from_dict",
     "module_boundary_derivation_result_to_dict",
+    "module_calibration_request_from_dict",
+    "module_calibration_request_to_dict",
+    "module_calibration_result_from_dict",
+    "module_calibration_result_to_dict",
     "module_simulation_request_from_dict",
     "module_simulation_request_to_dict",
     "module_simulation_result_from_dict",
