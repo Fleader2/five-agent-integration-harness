@@ -27,7 +27,7 @@ either Agent 3 or Agent 4 were needed).
 from app.harness.module_calibration import run_module_calibration_workflow
 
 result = run_module_calibration_workflow(
-    request,              # a ModuleCalibrationRequest dict (built Agent2-side)
+    request,  # a ModuleCalibrationRequest dict (built Agent2-side)
     calibration_request,  # a plain dict matching Agent 4's own CalibrationRequest shape
     stage_dir="artifacts/module-runs/<run_id>",
 )

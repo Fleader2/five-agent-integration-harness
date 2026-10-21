@@ -197,17 +197,13 @@ def _calibration_request() -> dict:
 def test_full_round_trip_recovers_true_parameter(tmp_path):
     run_id = f"module-calib-success-{uuid.uuid4().hex[:8]}"
     request = _request(run_id=run_id)
-    result = run_module_calibration_workflow(
-        request, _calibration_request(), stage_dir=tmp_path
-    )
+    result = run_module_calibration_workflow(request, _calibration_request(), stage_dir=tmp_path)
     assert result["status"] == "CALIBRATION_SUPPORTED"
     assert result["parent_model_id"] == "parent-model"
     assert result["modularization_id"] == "mz-1"
     assert result["module_id"] == "mod-1"
     assert result["fit_quality"]["objective_after"] < result["fit_quality"]["objective_before"]
-    estimates = {
-        p["target_id"]: p["fitted_value"] for p in result["parameter_uncertainty"]
-    }
+    estimates = {p["target_id"]: p["fitted_value"] for p in result["parameter_uncertainty"]}
     assert estimates["k1"] == pytest.approx(_TRUE_K, rel=0.05)
     # Calibration Evidence Integration into Weight-Space Exploration increment: Agent 4 now
     # exposes a local standard-error estimate directly -- genuinely available here, never

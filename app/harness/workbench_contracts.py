@@ -94,6 +94,21 @@ class WorkbenchRunErrorCode(StrEnum):
     #: validation outcome (SUCCESS/VALIDATION_FAILED/OVERFIT_WARNING/etc. are all carried
     #: through in the result's own ``agent5_report``).
     MODULE_VALIDATION_EXECUTION_FAILED = "MODULE_VALIDATION_EXECUTION_FAILED"
+    #: Module-Set Edited-Module Materialization increment:
+    #: ``app.harness.module_rematerialization.ModuleRematerializationWorkflowError`` -- a
+    #: malformed request, an unknown reaction id, a selection with zero reactions, or an Agent
+    #: 2 subprocess failure. Never produced for a module that materializes correctly but has
+    #: no eligible standalone executable artifact yet (a genuine, disclosed "materialized, not
+    #: yet simulatable" outcome -- carried in the result's own ``readiness_blocked_reason``,
+    #: never an error).
+    MODULE_REMATERIALIZATION_FAILED = "MODULE_REMATERIALIZATION_FAILED"
+    #: Module-Set Edited-Module Materialization increment, Phase B:
+    #: ``app.harness.module_set_simulation.ModuleSetSimulationWorkflowError`` -- a malformed
+    #: request, no resolved boundary treatments supplied, a rebuilt module with no eligible
+    #: standalone executable artifact, or an Agent 2/Agent 3 subprocess failure. Never produced
+    #: for a real, disclosed Agent 3 simulation outcome (carried through verbatim in the
+    #: result's own ``agent3_report``).
+    MODULE_SET_SIMULATION_FAILED = "MODULE_SET_SIMULATION_FAILED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -853,6 +868,331 @@ def module_boundary_derivation_result_from_dict(
     )
 
 
+#: Module-Set Edited-Module Materialization increment -- a genuinely separate contract: this
+#: one names rebuilding one module's own executable content from a Workbench-supplied,
+#: explicit REACTION-id selection (never a pre-existing, already-decided ``attach_payload``) --
+#: correctly recomputing its full dependency closure through Agent 2's own, unmodified
+#: ``materialize_submodel``, and (only once resolved boundary treatments are also supplied) an
+#: executable module handoff. Deliberately its own version.
+WORKBENCH_MODULE_REMATERIALIZATION_CONTRACT_VERSION = "workbench-module-rematerialization-v1"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModuleRematerializationRequest:
+    """What the Workbench sends to ask the harness to rebuild one module's own executable
+    content from an explicit, possibly-edited reaction selection.
+
+    ``attach_payload`` is the Workbench's own synthetic ``{"modularization_id", "module_ids",
+    "memberships"}`` dict naming exactly one target module's own current reaction selection --
+    REACTION-type memberships only; never species/parameters/rules/events/observables, which
+    the harness's own Agent 2 call derives correctly. ``module_id`` names the target module
+    within it. ``module_ports``, when given, are the scientist's own resolved boundary
+    treatments for this exact selection (never carried forward from a different selection) --
+    omit for a materialize-structure-only call.
+    """
+
+    contract_version: str
+    run_id: str
+    project_id: str
+    subproject_id: str
+    attach_payload: dict
+    module_id: str
+    module_ports: tuple[dict, ...] = ()
+    agent1_organism_id: str | None = None
+    input_artifact_references: dict[str, str] = field(default_factory=dict)
+    correlation_id: str | None = None
+    notes: str | None = None
+    submitted_at: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModuleRematerializationResult:
+    """What the harness reports back for one ``WorkbenchModuleRematerializationRequest``."""
+
+    contract_version: str
+    run_id: str
+    status: WorkbenchRunStatus
+    module_id: str | None
+    #: The Agent 2 module-handoff dict (species/reactions/parameters/kinetic laws, as every
+    #: other module-scoped workflow already produces) -- ``None`` unless ``module_ports`` made
+    #: the rebuilt module genuinely executable.
+    module_handoff: dict | None
+    #: Set only when ``module_handoff`` is ``None`` -- why it isn't executable yet (e.g. no
+    #: boundary treatments supplied), never a fabricated reason.
+    readiness_blocked_reason: str | None
+    #: ``{"parent_model_id", "parent_modularization_id", "parent_module_id",
+    #: "submodel_modularization_id", "submodel_module_id", "retained_reaction_ids",
+    #: "retained_species_ids", "retained_parameter_ids", "retained_compartment_ids",
+    #: "explicit_enzyme_species_ids", "retained_rule_ids", "retained_event_ids",
+    #: "retained_observable_ids", "materialization_policy_version"}`` -- exact traceability
+    #: back to the parent model and the real closure this selection actually produced.
+    lineage: dict | None
+    #: ``[{"component_type", "component_id", "referenced_ids", "reason"}, ...]`` -- rule/event/
+    #: observable exclusions, disclosed, never silently dropped.
+    unresolved_dependencies: tuple[dict, ...] = ()
+    started_at: str | None = None
+    completed_at: str | None = None
+    error: WorkbenchRunError | None = None
+    summary: str = ""
+    warnings: tuple[str, ...] = ()
+    replayed: bool = False
+
+
+def module_rematerialization_request_to_dict(
+    request: WorkbenchModuleRematerializationRequest,
+) -> dict:
+    """Serialize a ``WorkbenchModuleRematerializationRequest`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": request.contract_version,
+        "run_id": request.run_id,
+        "project_id": request.project_id,
+        "subproject_id": request.subproject_id,
+        "attach_payload": dict(request.attach_payload),
+        "module_id": request.module_id,
+        "module_ports": list(request.module_ports),
+        "agent1_organism_id": request.agent1_organism_id,
+        "input_artifact_references": dict(request.input_artifact_references),
+        "correlation_id": request.correlation_id,
+        "notes": request.notes,
+        "submitted_at": request.submitted_at,
+    }
+
+
+def module_rematerialization_request_from_dict(
+    data: dict,
+) -> WorkbenchModuleRematerializationRequest:
+    """Parse a plain dict into a ``WorkbenchModuleRematerializationRequest``. Raises
+    ``KeyError``/``TypeError`` on a malformed request -- the canonical entrypoint catches these
+    and reports ``WorkbenchRunErrorCode.MALFORMED_REQUEST``, never a traceback."""
+    return WorkbenchModuleRematerializationRequest(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        project_id=data["project_id"],
+        subproject_id=data["subproject_id"],
+        attach_payload=dict(data["attach_payload"]),
+        module_id=data["module_id"],
+        module_ports=tuple(data.get("module_ports") or ()),
+        agent1_organism_id=data.get("agent1_organism_id"),
+        input_artifact_references=dict(data.get("input_artifact_references") or {}),
+        correlation_id=data.get("correlation_id"),
+        notes=data.get("notes"),
+        submitted_at=data.get("submitted_at"),
+    )
+
+
+def module_rematerialization_result_to_dict(result: WorkbenchModuleRematerializationResult) -> dict:
+    """Serialize a ``WorkbenchModuleRematerializationResult`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": result.contract_version,
+        "run_id": result.run_id,
+        "status": result.status.value,
+        "module_id": result.module_id,
+        "module_handoff": result.module_handoff,
+        "readiness_blocked_reason": result.readiness_blocked_reason,
+        "lineage": result.lineage,
+        "unresolved_dependencies": list(result.unresolved_dependencies),
+        "started_at": result.started_at,
+        "completed_at": result.completed_at,
+        "error": (
+            None
+            if result.error is None
+            else {
+                "code": result.error.code,
+                "message": result.error.message,
+                "stage_name": result.error.stage_name,
+            }
+        ),
+        "summary": result.summary,
+        "warnings": list(result.warnings),
+        "replayed": result.replayed,
+    }
+
+
+def module_rematerialization_result_from_dict(
+    data: dict,
+) -> WorkbenchModuleRematerializationResult:
+    """The inverse of ``module_rematerialization_result_to_dict`` -- used to load a cached
+    result for replay."""
+    error_data = data.get("error")
+    error = (
+        None
+        if error_data is None
+        else WorkbenchRunError(
+            code=error_data["code"],
+            message=error_data["message"],
+            stage_name=error_data.get("stage_name"),
+        )
+    )
+    return WorkbenchModuleRematerializationResult(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        status=WorkbenchRunStatus(data["status"]),
+        module_id=data.get("module_id"),
+        module_handoff=data.get("module_handoff"),
+        readiness_blocked_reason=data.get("readiness_blocked_reason"),
+        lineage=data.get("lineage"),
+        unresolved_dependencies=tuple(data.get("unresolved_dependencies", ())),
+        started_at=data.get("started_at"),
+        completed_at=data.get("completed_at"),
+        error=error,
+        summary=data.get("summary", ""),
+        warnings=tuple(data.get("warnings", ())),
+        replayed=bool(data.get("replayed", False)),
+    )
+
+
+#: Module-Set Edited-Module Materialization increment, Phase B -- a genuinely separate
+#: contract: this one names *simulating* a module-set member's own current reaction selection
+#: and resolved boundary treatments (correct rebuild through
+#: ``WorkbenchModuleRematerializationRequest``'s own mechanism, then unchanged Agent 3) --
+#: never a pre-existing, already-decided ``attach_payload``. Deliberately its own version.
+WORKBENCH_MODULE_SET_SIMULATION_CONTRACT_VERSION = "workbench-module-set-simulation-v1"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModuleSetSimulationRequest:
+    """What the Workbench sends to ask the harness to simulate one module-set member's own
+    current, possibly-edited reaction selection.
+
+    ``attach_payload``/``module_id`` are identical in shape to
+    ``WorkbenchModuleRematerializationRequest``'s own fields. ``module_ports`` -- the
+    scientist's own resolved boundary treatments for this exact selection -- is required here
+    (never optional, unlike the rematerialization contract's own structure-only mode): this
+    contract's entire purpose is producing a real Agent 3 simulation, never a materialize-only
+    outcome.
+    """
+
+    contract_version: str
+    run_id: str
+    project_id: str
+    subproject_id: str
+    attach_payload: dict
+    module_id: str
+    module_ports: tuple[dict, ...]
+    agent1_organism_id: str | None = None
+    input_artifact_references: dict[str, str] = field(default_factory=dict)
+    correlation_id: str | None = None
+    notes: str | None = None
+    submitted_at: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModuleSetSimulationResult:
+    """What the harness reports back for one ``WorkbenchModuleSetSimulationRequest``."""
+
+    contract_version: str
+    run_id: str
+    status: WorkbenchRunStatus
+    module_id: str | None
+    module_handoff_summary: dict | None
+    #: Exact traceability for *this* simulation's own rebuilt module -- see
+    #: ``WorkbenchModuleRematerializationResult.lineage``'s own shape.
+    lineage: dict | None
+    #: Agent 3's own full ``Agent3Report`` dict, read verbatim -- never reshaped here.
+    agent3_report: dict | None
+    started_at: str | None
+    completed_at: str | None
+    error: WorkbenchRunError | None
+    summary: str
+    warnings: tuple[str, ...] = ()
+    replayed: bool = False
+
+
+def module_set_simulation_request_to_dict(request: WorkbenchModuleSetSimulationRequest) -> dict:
+    """Serialize a ``WorkbenchModuleSetSimulationRequest`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": request.contract_version,
+        "run_id": request.run_id,
+        "project_id": request.project_id,
+        "subproject_id": request.subproject_id,
+        "attach_payload": dict(request.attach_payload),
+        "module_id": request.module_id,
+        "module_ports": list(request.module_ports),
+        "agent1_organism_id": request.agent1_organism_id,
+        "input_artifact_references": dict(request.input_artifact_references),
+        "correlation_id": request.correlation_id,
+        "notes": request.notes,
+        "submitted_at": request.submitted_at,
+    }
+
+
+def module_set_simulation_request_from_dict(data: dict) -> WorkbenchModuleSetSimulationRequest:
+    """Parse a plain dict into a ``WorkbenchModuleSetSimulationRequest``. Raises
+    ``KeyError``/``TypeError`` on a malformed request -- the canonical entrypoint catches these
+    and reports ``WorkbenchRunErrorCode.MALFORMED_REQUEST``, never a traceback."""
+    return WorkbenchModuleSetSimulationRequest(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        project_id=data["project_id"],
+        subproject_id=data["subproject_id"],
+        attach_payload=dict(data["attach_payload"]),
+        module_id=data["module_id"],
+        module_ports=tuple(data.get("module_ports") or ()),
+        agent1_organism_id=data.get("agent1_organism_id"),
+        input_artifact_references=dict(data.get("input_artifact_references") or {}),
+        correlation_id=data.get("correlation_id"),
+        notes=data.get("notes"),
+        submitted_at=data.get("submitted_at"),
+    )
+
+
+def module_set_simulation_result_to_dict(result: WorkbenchModuleSetSimulationResult) -> dict:
+    """Serialize a ``WorkbenchModuleSetSimulationResult`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": result.contract_version,
+        "run_id": result.run_id,
+        "status": result.status.value,
+        "module_id": result.module_id,
+        "module_handoff_summary": result.module_handoff_summary,
+        "lineage": result.lineage,
+        "agent3_report": result.agent3_report,
+        "started_at": result.started_at,
+        "completed_at": result.completed_at,
+        "error": (
+            None
+            if result.error is None
+            else {
+                "code": result.error.code,
+                "message": result.error.message,
+                "stage_name": result.error.stage_name,
+            }
+        ),
+        "summary": result.summary,
+        "warnings": list(result.warnings),
+        "replayed": result.replayed,
+    }
+
+
+def module_set_simulation_result_from_dict(data: dict) -> WorkbenchModuleSetSimulationResult:
+    """The inverse of ``module_set_simulation_result_to_dict`` -- used to load a cached result
+    for replay."""
+    error_data = data.get("error")
+    error = (
+        None
+        if error_data is None
+        else WorkbenchRunError(
+            code=error_data["code"],
+            message=error_data["message"],
+            stage_name=error_data.get("stage_name"),
+        )
+    )
+    return WorkbenchModuleSetSimulationResult(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        status=WorkbenchRunStatus(data["status"]),
+        module_id=data.get("module_id"),
+        module_handoff_summary=data.get("module_handoff_summary"),
+        lineage=data.get("lineage"),
+        agent3_report=data.get("agent3_report"),
+        started_at=data.get("started_at"),
+        completed_at=data.get("completed_at"),
+        error=error,
+        summary=data.get("summary", ""),
+        warnings=tuple(data.get("warnings", ())),
+        replayed=bool(data.get("replayed", False)),
+    )
+
+
 #: Module-Level Agent4 Calibration increment -- a fifth, genuinely separate contract: this one
 #: names calibrating one already-accepted hierarchy module's own standalone executable
 #: artifact through Agent 2, Agent 3, then Agent 4 against Workbench-supplied experimental
@@ -1179,6 +1519,8 @@ __all__ = [
     "WORKBENCH_HIERARCHICAL_RESUME_CONTRACT_VERSION",
     "WORKBENCH_MODULE_BOUNDARY_DERIVATION_CONTRACT_VERSION",
     "WORKBENCH_MODULE_CALIBRATION_CONTRACT_VERSION",
+    "WORKBENCH_MODULE_REMATERIALIZATION_CONTRACT_VERSION",
+    "WORKBENCH_MODULE_SET_SIMULATION_CONTRACT_VERSION",
     "WORKBENCH_MODULE_SIMULATION_CONTRACT_VERSION",
     "WORKBENCH_MODULE_VALIDATION_CONTRACT_VERSION",
     "WorkbenchHierarchicalInvocationRequest",
@@ -1190,6 +1532,10 @@ __all__ = [
     "WorkbenchModuleBoundaryDerivationResult",
     "WorkbenchModuleCalibrationRequest",
     "WorkbenchModuleCalibrationResult",
+    "WorkbenchModuleRematerializationRequest",
+    "WorkbenchModuleRematerializationResult",
+    "WorkbenchModuleSetSimulationRequest",
+    "WorkbenchModuleSetSimulationResult",
     "WorkbenchModuleSimulationRequest",
     "WorkbenchModuleSimulationResult",
     "WorkbenchModuleValidationRequest",
@@ -1211,6 +1557,14 @@ __all__ = [
     "module_calibration_request_to_dict",
     "module_calibration_result_from_dict",
     "module_calibration_result_to_dict",
+    "module_rematerialization_request_from_dict",
+    "module_rematerialization_request_to_dict",
+    "module_rematerialization_result_from_dict",
+    "module_rematerialization_result_to_dict",
+    "module_set_simulation_request_from_dict",
+    "module_set_simulation_request_to_dict",
+    "module_set_simulation_result_from_dict",
+    "module_set_simulation_result_to_dict",
     "module_simulation_request_from_dict",
     "module_simulation_request_to_dict",
     "module_simulation_result_from_dict",

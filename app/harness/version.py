@@ -334,6 +334,28 @@ MODULE_CALIBRATION_EXECUTION_WORKFLOW_POLICY_VERSION = "module-calibration-execu
 #: identical "never compress the downstream agent's own report" policy.
 MODULE_VALIDATION_EXECUTION_WORKFLOW_POLICY_VERSION = "module-validation-execution-workflow-v1"
 
+#: Module-Set Edited-Module Materialization increment -- the version of
+#: ``app.harness.module_rematerialization``'s own request/result shape (routing a Workbench-
+#: supplied, explicit REACTION-id selection for one module through Agent 2's own, unmodified
+#: ``materialize_submodel`` to correctly recompute its full dependency closure, then -- only if
+#: resolved boundary treatments are also supplied -- an executable module handoff via the
+#: identical, unmodified ``build_module_calibration_request`` every other module-scoped
+#: workflow already uses). Distinct from ``MODULE_BOUNDARY_DERIVATION_WORKFLOW_POLICY_VERSION``
+#: (structural candidates only, no closure recomputation needed or performed) and from
+#: ``MODULE_CALIBRATION_EXECUTION_WORKFLOW_POLICY_VERSION``/``MODULE_SIMULATION_WORKFLOW
+#: _POLICY_VERSION`` (both of which materialize from an already-complete, previously-decided
+#: ``attach_payload``, never an edited, reaction-only one).
+MODULE_REMATERIALIZATION_WORKFLOW_POLICY_VERSION = "module-rematerialization-workflow-v1"
+
+#: Module-Set Edited-Module Materialization increment, Phase B -- the version of
+#: ``app.harness.module_set_simulation``'s own request/result shape (routing a module-set
+#: member's own reaction selection and resolved boundary treatments through
+#: ``run_module_rematerialization_workflow`` then unchanged Agent 3). Distinct from
+#: ``MODULE_REMATERIALIZATION_WORKFLOW_POLICY_VERSION`` (structure/handoff only, Agent 3 never
+#: invoked) and from ``MODULE_SIMULATION_WORKFLOW_POLICY_VERSION`` (materializes from an
+#: already-complete, previously-decided ``attach_payload``, never an edited one).
+MODULE_SET_SIMULATION_WORKFLOW_POLICY_VERSION = "module-set-simulation-workflow-v1"
+
 __all__ = [
     "AGENT1_CONTRACT_VERSION",
     "AGENT2_BUILD_REQUEST_CONTRACT_VERSION",
@@ -354,6 +376,8 @@ __all__ = [
     "MODULE_BOUNDARY_DERIVATION_WORKFLOW_POLICY_VERSION",
     "MODULE_CALIBRATION_EXECUTION_WORKFLOW_POLICY_VERSION",
     "MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION",
+    "MODULE_REMATERIALIZATION_WORKFLOW_POLICY_VERSION",
+    "MODULE_SET_SIMULATION_WORKFLOW_POLICY_VERSION",
     "MODULE_SIMULATION_WORKFLOW_POLICY_VERSION",
     "MODULE_VALIDATION_EXECUTION_WORKFLOW_POLICY_VERSION",
     "RECURSIVE_CANDIDATE_SEARCH_POLICY_VERSION",
