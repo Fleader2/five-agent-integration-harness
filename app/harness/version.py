@@ -356,6 +356,14 @@ MODULE_REMATERIALIZATION_WORKFLOW_POLICY_VERSION = "module-rematerialization-wor
 #: already-complete, previously-decided ``attach_payload``, never an edited one).
 MODULE_SET_SIMULATION_WORKFLOW_POLICY_VERSION = "module-set-simulation-workflow-v1"
 
+#: Model-Species Catalog Prerequisite increment -- the version of ``app.harness
+#: .model_antimony_verification``'s own request/result shape (compiling a whole model's own
+#: already-generated Antimony text through Agent 3's own loader and reporting its real, loaded
+#: species/compartment identifiers -- never Agent 2's structural network, which this increment's
+#: own verification step confirmed is not guaranteed to have identical membership). Agent 2 is
+#: never invoked by this workflow -- it only verifies Antimony text the Workbench already has.
+MODEL_ANTIMONY_VERIFICATION_WORKFLOW_POLICY_VERSION = "model-antimony-verification-workflow-v1"
+
 __all__ = [
     "AGENT1_CONTRACT_VERSION",
     "AGENT2_BUILD_REQUEST_CONTRACT_VERSION",
@@ -373,6 +381,7 @@ __all__ = [
     "HARNESS_CONTRACT_VERSION",
     "HIERARCHICAL_RECURSION_CHECKPOINT_VERSION",
     "HIERARCHICAL_RECURSION_POLICY_VERSION",
+    "MODEL_ANTIMONY_VERIFICATION_WORKFLOW_POLICY_VERSION",
     "MODULE_BOUNDARY_DERIVATION_WORKFLOW_POLICY_VERSION",
     "MODULE_CALIBRATION_EXECUTION_WORKFLOW_POLICY_VERSION",
     "MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION",

@@ -1193,6 +1193,145 @@ def module_set_simulation_result_from_dict(data: dict) -> WorkbenchModuleSetSimu
     )
 
 
+#: Model-Species Catalog Prerequisite increment -- a genuinely separate contract: this one
+#: verifies a whole model's own already-generated Antimony text actually compiles, and reports
+#: its real, loaded species/compartment identifiers. Agent 2 is never invoked here -- the
+#: Workbench already has the Antimony text from its own prior full-model build.
+WORKBENCH_MODEL_ANTIMONY_VERIFICATION_CONTRACT_VERSION = "workbench-model-antimony-verification-v1"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModelAntimonyVerificationRequest:
+    """What the Workbench sends to ask the harness to verify one whole model's own real,
+    already-generated Antimony text."""
+
+    contract_version: str
+    run_id: str
+    antimony_text: str
+    correlation_id: str | None = None
+    submitted_at: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModelAntimonyVerificationResult:
+    """What the harness reports back for one ``WorkbenchModelAntimonyVerificationRequest``.
+
+    ``status`` is ``SUCCEEDED`` whenever the verification *ran* (even when ``load_succeeded``
+    is ``False`` -- an Antimony compilation failure is a real, reported outcome, never an
+    infrastructure error) -- only a genuine infrastructure defect (an Agent 3 subprocess crash/
+    timeout/malformed output) ever reports ``FAILED`` here.
+    """
+
+    contract_version: str
+    run_id: str
+    status: WorkbenchRunStatus
+    load_succeeded: bool
+    load_message: str | None
+    floating_species_ids: tuple[str, ...]
+    boundary_species_ids: tuple[str, ...]
+    compartment_ids: tuple[str, ...]
+    antimony_version: str | None
+    roadrunner_version: str | None
+    started_at: str | None
+    completed_at: str | None
+    error: WorkbenchRunError | None
+    summary: str
+    replayed: bool = False
+
+
+def model_antimony_verification_request_to_dict(
+    request: WorkbenchModelAntimonyVerificationRequest,
+) -> dict:
+    """Serialize a ``WorkbenchModelAntimonyVerificationRequest`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": request.contract_version,
+        "run_id": request.run_id,
+        "antimony_text": request.antimony_text,
+        "correlation_id": request.correlation_id,
+        "submitted_at": request.submitted_at,
+    }
+
+
+def model_antimony_verification_request_from_dict(
+    data: dict,
+) -> WorkbenchModelAntimonyVerificationRequest:
+    """Parse a plain dict into a ``WorkbenchModelAntimonyVerificationRequest``. Raises
+    ``KeyError``/``TypeError`` on a malformed request -- the canonical entrypoint catches these
+    and reports ``WorkbenchRunErrorCode.MALFORMED_REQUEST``, never a traceback."""
+    return WorkbenchModelAntimonyVerificationRequest(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        antimony_text=data["antimony_text"],
+        correlation_id=data.get("correlation_id"),
+        submitted_at=data.get("submitted_at"),
+    )
+
+
+def model_antimony_verification_result_to_dict(
+    result: WorkbenchModelAntimonyVerificationResult,
+) -> dict:
+    """Serialize a ``WorkbenchModelAntimonyVerificationResult`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": result.contract_version,
+        "run_id": result.run_id,
+        "status": result.status.value,
+        "load_succeeded": result.load_succeeded,
+        "load_message": result.load_message,
+        "floating_species_ids": list(result.floating_species_ids),
+        "boundary_species_ids": list(result.boundary_species_ids),
+        "compartment_ids": list(result.compartment_ids),
+        "antimony_version": result.antimony_version,
+        "roadrunner_version": result.roadrunner_version,
+        "started_at": result.started_at,
+        "completed_at": result.completed_at,
+        "error": (
+            None
+            if result.error is None
+            else {
+                "code": result.error.code,
+                "message": result.error.message,
+                "stage_name": result.error.stage_name,
+            }
+        ),
+        "summary": result.summary,
+        "replayed": result.replayed,
+    }
+
+
+def model_antimony_verification_result_from_dict(
+    data: dict,
+) -> WorkbenchModelAntimonyVerificationResult:
+    """The inverse of ``model_antimony_verification_result_to_dict`` -- used to load a cached
+    result for replay."""
+    error_data = data.get("error")
+    error = (
+        None
+        if error_data is None
+        else WorkbenchRunError(
+            code=error_data["code"],
+            message=error_data["message"],
+            stage_name=error_data.get("stage_name"),
+        )
+    )
+    return WorkbenchModelAntimonyVerificationResult(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        status=WorkbenchRunStatus(data["status"]),
+        load_succeeded=bool(data["load_succeeded"]),
+        load_message=data.get("load_message"),
+        floating_species_ids=tuple(data.get("floating_species_ids", ())),
+        boundary_species_ids=tuple(data.get("boundary_species_ids", ())),
+        compartment_ids=tuple(data.get("compartment_ids", ())),
+        antimony_version=data.get("antimony_version"),
+        roadrunner_version=data.get("roadrunner_version"),
+        started_at=data.get("started_at"),
+        completed_at=data.get("completed_at"),
+        error=error,
+        summary=data.get("summary", ""),
+        replayed=bool(data.get("replayed", False)),
+    )
+
+
 #: Module-Level Agent4 Calibration increment -- a fifth, genuinely separate contract: this one
 #: names calibrating one already-accepted hierarchy module's own standalone executable
 #: artifact through Agent 2, Agent 3, then Agent 4 against Workbench-supplied experimental
@@ -1517,6 +1656,7 @@ __all__ = [
     "WORKBENCH_HARNESS_CONTRACT_VERSION",
     "WORKBENCH_HIERARCHICAL_CONTRACT_VERSION",
     "WORKBENCH_HIERARCHICAL_RESUME_CONTRACT_VERSION",
+    "WORKBENCH_MODEL_ANTIMONY_VERIFICATION_CONTRACT_VERSION",
     "WORKBENCH_MODULE_BOUNDARY_DERIVATION_CONTRACT_VERSION",
     "WORKBENCH_MODULE_CALIBRATION_CONTRACT_VERSION",
     "WORKBENCH_MODULE_REMATERIALIZATION_CONTRACT_VERSION",
@@ -1528,6 +1668,8 @@ __all__ = [
     "WorkbenchHierarchicalRunResult",
     "WorkbenchHierarchyNodeSummary",
     "WorkbenchInvocationRequest",
+    "WorkbenchModelAntimonyVerificationRequest",
+    "WorkbenchModelAntimonyVerificationResult",
     "WorkbenchModuleBoundaryDerivationRequest",
     "WorkbenchModuleBoundaryDerivationResult",
     "WorkbenchModuleCalibrationRequest",
@@ -1549,6 +1691,10 @@ __all__ = [
     "hierarchical_result_to_dict",
     "hierarchical_resume_request_from_dict",
     "hierarchical_resume_request_to_dict",
+    "model_antimony_verification_request_from_dict",
+    "model_antimony_verification_request_to_dict",
+    "model_antimony_verification_result_from_dict",
+    "model_antimony_verification_result_to_dict",
     "module_boundary_derivation_request_from_dict",
     "module_boundary_derivation_request_to_dict",
     "module_boundary_derivation_result_from_dict",
