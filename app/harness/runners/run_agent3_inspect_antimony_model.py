@@ -9,13 +9,28 @@ Usage: ``run_agent3_inspect_antimony_model.py --input <antimony_text.txt> --outp
 
 Reads a plain Antimony source file and compiles it via Agent 3's own, already-committed
 ``app.agent3.loader.load_antimony_model`` -- never a second, re-implemented Antimony/RoadRunner
-integration. Reports the real, compiled model's own species/compartment identifiers
+integration. Reports the real, compiled model's own species/compartment/parameter identifiers
 (``roadrunner.RoadRunner.model.getFloatingSpeciesIds``/``getBoundarySpeciesIds``/
-``getCompartmentIds``) -- this is the one authoritative ground truth a structural network's own
-species list (Agent 2's own ``FullNetwork``) is never assumed to match exactly (Model-Species
-Catalog Prerequisite increment, Workbench ``docs/26``): a species Agent 2's structural graph
-names is not guaranteed to survive into the actually-compiled, loadable model, so this script's
-own output -- never the structural network -- decides what belongs in a species catalog.
+``getCompartmentIds``/``getGlobalParameterIds``) -- this is the one authoritative ground truth a
+structural network's own species/parameter list (Agent 2's own ``FullNetwork``) is never
+assumed to match exactly (Model-Species Catalog Prerequisite increment, Workbench ``docs/26``;
+Joint Calibration Workflow prerequisite increment, Workbench ``docs/31``): a species or
+parameter Agent 2's structural graph names is not guaranteed to survive into the actually-
+compiled, loadable model, so this script's own output -- never the structural network --
+decides what belongs in a species or parameter catalog.
+
+**Independent vs. assignment-rule-derived parameters.** ``roadrunner.RoadRunner.model
+.getGlobalParameterIds()`` reports every global parameter with no distinction between a
+genuinely independent, settable constant and one whose value is actually computed by an SBML
+assignment rule (e.g. Antimony's own ``Vmax := k1 * 2``) -- confirmed live:
+``getAssignmentRuleIds`` is unusable from Python (a broken SWIG binding for its ``std::list&``
+out-parameter, raises ``TypeError`` regardless of what is passed). The reliable mechanism is
+one extra round trip through the model's own compiled SBML: ``rr.getCurrentSBML()``, parsed
+with ``libsbml`` (already an installed dependency here -- RoadRunner itself depends on it; no
+new dependency), then every ``Rule`` with ``isAssignment() is True`` names its own
+``getVariable()`` as derived. A parameter in ``global_parameter_ids`` but *not* in
+``assignment_rule_derived_parameter_ids`` is independent/settable; one that *is* in the latter
+is a derived quantity and must never be treated as an independent calibration target.
 
 A compilation failure is reported as data (``load_succeeded: false``, ``load_message``), never
 a non-zero exit for *that* reason -- this script's whole purpose is to report whether the model
@@ -28,6 +43,27 @@ from __future__ import annotations
 
 import argparse
 import json
+
+
+def _assignment_rule_derived_parameter_ids(rr) -> list[str]:
+    """Every global parameter id that is actually computed by an SBML assignment rule in the
+    compiled model -- see module docstring for why this, not ``getAssignmentRuleIds``, is the
+    reliable mechanism. Returns an empty list (never raises) if the current SBML cannot be
+    re-parsed for any reason -- a defensive fallback only; a model that just successfully
+    compiled via RoadRunner re-parsing as SBML through the identical library is not expected to
+    fail in practice, but this script's own purpose (reporting whether/what loaded) must never
+    be aborted by this secondary, best-effort classification."""
+    try:
+        import libsbml
+
+        sbml_model = libsbml.readSBMLFromString(rr.getCurrentSBML()).getModel()
+        return [
+            sbml_model.getRule(i).getVariable()
+            for i in range(sbml_model.getNumRules())
+            if sbml_model.getRule(i).isAssignment()
+        ]
+    except Exception:  # defensive -- see docstring; never blocks the primary inspection result
+        return []
 
 
 def main() -> int:
@@ -50,6 +86,8 @@ def main() -> int:
             "floating_species_ids": [],
             "boundary_species_ids": [],
             "compartment_ids": [],
+            "global_parameter_ids": [],
+            "assignment_rule_derived_parameter_ids": [],
             "antimony_version": result.antimony_version,
             "roadrunner_version": result.roadrunner_version,
         }
@@ -62,6 +100,8 @@ def main() -> int:
             "floating_species_ids": list(rr.model.getFloatingSpeciesIds()),
             "boundary_species_ids": list(rr.model.getBoundarySpeciesIds()),
             "compartment_ids": list(rr.model.getCompartmentIds()),
+            "global_parameter_ids": list(rr.model.getGlobalParameterIds()),
+            "assignment_rule_derived_parameter_ids": _assignment_rule_derived_parameter_ids(rr),
             "antimony_version": result.antimony_version,
             "roadrunner_version": result.roadrunner_version,
         }
@@ -72,6 +112,7 @@ def main() -> int:
     print(f"load_succeeded={output['load_succeeded']}")
     print(f"floating_species_count={len(output['floating_species_ids'])}")
     print(f"boundary_species_count={len(output['boundary_species_ids'])}")
+    print(f"global_parameter_count={len(output['global_parameter_ids'])}")
     return 0
 
 

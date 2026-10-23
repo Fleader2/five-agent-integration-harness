@@ -109,6 +109,10 @@ def _execute(
         completed_at=completed_at,
         error=None,
         summary=summary,
+        global_parameter_ids=tuple(result.get("global_parameter_ids", ())),
+        assignment_rule_derived_parameter_ids=tuple(
+            result.get("assignment_rule_derived_parameter_ids", ())
+        ),
     )
 
 

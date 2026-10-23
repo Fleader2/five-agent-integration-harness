@@ -1237,6 +1237,16 @@ class WorkbenchModelAntimonyVerificationResult:
     error: WorkbenchRunError | None
     summary: str
     replayed: bool = False
+    #: Joint Calibration Workflow prerequisite increment (Workbench ``docs/31``): every real,
+    #: compiled global parameter id -- appended fields, defaulted to ``()``, so every existing
+    #: caller/fixture that constructs this dataclass without them (pre-dating this increment)
+    #: keeps working unchanged.
+    global_parameter_ids: tuple[str, ...] = ()
+    #: The subset of ``global_parameter_ids`` that an SBML assignment rule actually computes --
+    #: never independently settable/fittable. See ``app.harness.runners
+    #: .run_agent3_inspect_antimony_model`` for exactly how this is determined and why
+    #: ``getAssignmentRuleIds`` itself is unusable from Python.
+    assignment_rule_derived_parameter_ids: tuple[str, ...] = ()
 
 
 def model_antimony_verification_request_to_dict(
@@ -1295,6 +1305,10 @@ def model_antimony_verification_result_to_dict(
         ),
         "summary": result.summary,
         "replayed": result.replayed,
+        "global_parameter_ids": list(result.global_parameter_ids),
+        "assignment_rule_derived_parameter_ids": list(
+            result.assignment_rule_derived_parameter_ids
+        ),
     }
 
 
@@ -1329,6 +1343,10 @@ def model_antimony_verification_result_from_dict(
         error=error,
         summary=data.get("summary", ""),
         replayed=bool(data.get("replayed", False)),
+        global_parameter_ids=tuple(data.get("global_parameter_ids", ())),
+        assignment_rule_derived_parameter_ids=tuple(
+            data.get("assignment_rule_derived_parameter_ids", ())
+        ),
     )
 
 

@@ -38,7 +38,8 @@ def run_model_antimony_verification_workflow(
 ) -> dict[str, Any]:
     """Route ``request["antimony_text"]`` through Agent 3's own loader and return
     ``{"load_succeeded", "load_message", "floating_species_ids", "boundary_species_ids",
-    "compartment_ids", "antimony_version", "roadrunner_version"}``.
+    "compartment_ids", "global_parameter_ids", "assignment_rule_derived_parameter_ids",
+    "antimony_version", "roadrunner_version"}``.
 
     ``request`` keys: ``run_id``, ``antimony_text`` (the real, already-generated Antimony
     source for one whole model -- never a module's own reduced/standalone text, which has its
@@ -84,6 +85,10 @@ def run_model_antimony_verification_workflow(
         "floating_species_ids": inspection["floating_species_ids"],
         "boundary_species_ids": inspection["boundary_species_ids"],
         "compartment_ids": inspection["compartment_ids"],
+        "global_parameter_ids": inspection.get("global_parameter_ids", []),
+        "assignment_rule_derived_parameter_ids": inspection.get(
+            "assignment_rule_derived_parameter_ids", []
+        ),
         "antimony_version": inspection["antimony_version"],
         "roadrunner_version": inspection["roadrunner_version"],
         "policy_version": MODEL_ANTIMONY_VERIFICATION_WORKFLOW_POLICY_VERSION,

@@ -63,6 +63,23 @@ model test_model_boundary
 end
 """
 
+#: Joint Calibration Workflow prerequisite increment (Workbench docs/31): one independent,
+#: genuinely settable parameter (``k1``) and one assignment-rule-derived parameter (``Vmax``,
+#: defined entirely in terms of ``k1`` -- never independently settable).
+_VALID_ANTIMONY_TEXT_WITH_DERIVED_PARAMETER = """
+model test_model_derived_parameter
+  compartment C1
+  C1 = 1.0
+  species S1 in C1
+  species S2 in C1
+  S1 = 10
+  S2 = 0
+  R1: S1 -> S2; Vmax*S1
+  k1 = 0.5
+  Vmax := k1 * 2
+end
+"""
+
 
 def _base_request(run_id: str, *, antimony_text: str, **overrides) -> dict:
     data = {
@@ -222,6 +239,26 @@ def test_a_boundary_species_is_reported_separately_from_floating(tmp_path):
         assert returncode == 0, f"canonical entrypoint failed: {result}"
         assert result["floating_species_ids"] == ["S1"]
         assert result["boundary_species_ids"] == ["S2"]
+    finally:
+        _cleanup_run_artifacts(run_id)
+
+
+def test_an_independent_parameter_is_distinguished_from_an_assignment_rule_derived_one(tmp_path):
+    """The exact distinction a parameter catalog must get right: ``k1`` is reported as a real,
+    independently settable global parameter; ``Vmax`` (entirely computed from ``k1`` by an
+    assignment rule) is reported too, but also named in
+    ``assignment_rule_derived_parameter_ids`` -- never presented as if it were equally
+    independent/fittable."""
+    run_id = "antimony-verify-derived-parameter"
+    try:
+        request_data = _base_request(
+            run_id, antimony_text=_VALID_ANTIMONY_TEXT_WITH_DERIVED_PARAMETER
+        )
+        returncode, result = _invoke(tmp_path, request_data)
+        assert returncode == 0, f"canonical entrypoint failed: {result}"
+        assert result["load_succeeded"] is True
+        assert set(result["global_parameter_ids"]) == {"k1", "Vmax"}
+        assert result["assignment_rule_derived_parameter_ids"] == ["Vmax"]
     finally:
         _cleanup_run_artifacts(run_id)
 
