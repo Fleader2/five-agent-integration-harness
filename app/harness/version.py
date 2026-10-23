@@ -364,6 +364,14 @@ MODULE_SET_SIMULATION_WORKFLOW_POLICY_VERSION = "module-set-simulation-workflow-
 #: never invoked by this workflow -- it only verifies Antimony text the Workbench already has.
 MODEL_ANTIMONY_VERIFICATION_WORKFLOW_POLICY_VERSION = "model-antimony-verification-workflow-v1"
 
+#: Whole-Model Experimental-Scenario Evaluation increment -- ``app.harness
+#: .model_scenario_evaluation``'s own request/result shape (evaluating one experimental
+#: scenario, given explicit candidate parameter values and initial-condition/step-intervention
+#: overrides, against one whole model's own already-generated Antimony text, through Agent 3's
+#: own ``app.agent3.scenario_evaluation`` directly). Prediction only, never fitting -- Agent 4
+#: is never invoked by this workflow.
+MODEL_SCENARIO_EVALUATION_WORKFLOW_POLICY_VERSION = "model-scenario-evaluation-workflow-v1"
+
 __all__ = [
     "AGENT1_CONTRACT_VERSION",
     "AGENT2_BUILD_REQUEST_CONTRACT_VERSION",
@@ -382,6 +390,7 @@ __all__ = [
     "HIERARCHICAL_RECURSION_CHECKPOINT_VERSION",
     "HIERARCHICAL_RECURSION_POLICY_VERSION",
     "MODEL_ANTIMONY_VERIFICATION_WORKFLOW_POLICY_VERSION",
+    "MODEL_SCENARIO_EVALUATION_WORKFLOW_POLICY_VERSION",
     "MODULE_BOUNDARY_DERIVATION_WORKFLOW_POLICY_VERSION",
     "MODULE_CALIBRATION_EXECUTION_WORKFLOW_POLICY_VERSION",
     "MODULE_CALIBRATION_WORKFLOW_POLICY_VERSION",

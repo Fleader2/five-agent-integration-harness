@@ -109,6 +109,13 @@ class WorkbenchRunErrorCode(StrEnum):
     #: for a real, disclosed Agent 3 simulation outcome (carried through verbatim in the
     #: result's own ``agent3_report``).
     MODULE_SET_SIMULATION_FAILED = "MODULE_SET_SIMULATION_FAILED"
+    #: Whole-Model Experimental-Scenario Evaluation increment:
+    #: ``app.harness.model_scenario_evaluation.ModelScenarioEvaluationWorkflowError`` -- a
+    #: malformed request or an Agent 3 subprocess crash/timeout/malformed output. Never
+    #: produced for a real, disclosed Agent 3 evaluation outcome (``MODEL_LOAD_FAILED``/
+    #: ``INVALID_REQUEST``/``SIMULATION_FAILED``/``NUMERICAL_INSTABILITY`` are all carried
+    #: through verbatim in the result's own ``evaluation_status``/``validation_errors``).
+    MODEL_SCENARIO_EVALUATION_FAILED = "MODEL_SCENARIO_EVALUATION_FAILED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1350,6 +1357,222 @@ def model_antimony_verification_result_from_dict(
     )
 
 
+#: Whole-Model Experimental-Scenario Evaluation increment -- a genuinely separate contract: this
+#: one evaluates one experimental scenario (explicit candidate parameter values, explicit
+#: initial-condition/step-intervention overrides, explicit requested output times) against one
+#: whole model's own real, already-generated Antimony text, through Agent 3's own
+#: ``app.agent3.scenario_evaluation`` directly -- never Agent 2 (no new build is needed; the
+#: Workbench already has the Antimony text), never Agent 4 (this is prediction, not fitting).
+WORKBENCH_MODEL_SCENARIO_EVALUATION_CONTRACT_VERSION = "workbench-model-scenario-evaluation-v1"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchStepIntervention:
+    """One step change applied *during* a trajectory, at its own declared ``time`` -- mirrors
+    ``app.agent3.scenario_evaluation.StepIntervention`` exactly (``target_kind`` is
+    ``"SPECIES"``/``"PARAMETER"``)."""
+
+    target_kind: str
+    target_id: str
+    time: float
+    value: float
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModelScenarioEvaluationRequest:
+    """What the Workbench sends to ask the harness to evaluate one experimental scenario
+    against one whole model's own real, already-generated Antimony text.
+
+    Every identifier field (``parameter_overrides``/``initial_value_overrides`` keys, every
+    ``interventions[*].target_id``, every ``requested_output_ids`` entry) is validated against
+    the real, compiled model by Agent 3 itself (``app.agent3.scenario_evaluation
+    ._validate_request``) -- never trusted from the Workbench's own catalog without that
+    independent check. Conflicting-assignment/dosing-schedule rejection is the Workbench's own
+    responsibility, before this request is ever built; this contract represents one, single,
+    already-resolved scenario.
+    """
+
+    contract_version: str
+    run_id: str
+    antimony_text: str
+    requested_times: tuple[float, ...]
+    requested_output_ids: tuple[str, ...]
+    parameter_overrides: dict[str, float] = field(default_factory=dict)
+    initial_value_overrides: dict[str, float] = field(default_factory=dict)
+    interventions: tuple[WorkbenchStepIntervention, ...] = ()
+    integrator: str = "cvode"
+    absolute_tolerance: float = 1e-10
+    relative_tolerance: float = 1e-8
+    correlation_id: str | None = None
+    submitted_at: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModelScenarioEvaluationResult:
+    """What the harness reports back for one ``WorkbenchModelScenarioEvaluationRequest``.
+
+    ``status`` is ``SUCCEEDED`` whenever the evaluation *ran* -- even when
+    ``evaluation_status`` is not ``"SUCCESS"`` (a real, reported scientific/request-validation
+    outcome, e.g. an unresolved identifier or a divergent trajectory, never an infrastructure
+    error). Only a genuine infrastructure defect (an Agent 3 subprocess crash/timeout/malformed
+    output) ever reports ``FAILED`` here. ``evaluation_status`` is one of
+    ``app.agent3.scenario_evaluation.ScenarioEvaluationStatus``'s own values, carried through
+    verbatim as a plain string (this repository never imports Agent 3's own package).
+    """
+
+    contract_version: str
+    run_id: str
+    status: WorkbenchRunStatus
+    evaluation_status: str
+    predictions: dict[str, tuple[float, ...]] | None
+    validation_errors: tuple[str, ...]
+    solver_message: str | None
+    antimony_version: str | None
+    roadrunner_version: str | None
+    started_at: str | None
+    completed_at: str | None
+    error: WorkbenchRunError | None
+    summary: str
+    replayed: bool = False
+
+
+def _step_intervention_to_dict(iv: WorkbenchStepIntervention) -> dict:
+    return {
+        "target_kind": iv.target_kind,
+        "target_id": iv.target_id,
+        "time": iv.time,
+        "value": iv.value,
+    }
+
+
+def _step_intervention_from_dict(data: dict) -> WorkbenchStepIntervention:
+    return WorkbenchStepIntervention(
+        target_kind=data["target_kind"],
+        target_id=data["target_id"],
+        time=data["time"],
+        value=data["value"],
+    )
+
+
+def model_scenario_evaluation_request_to_dict(
+    request: WorkbenchModelScenarioEvaluationRequest,
+) -> dict:
+    """Serialize a ``WorkbenchModelScenarioEvaluationRequest`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": request.contract_version,
+        "run_id": request.run_id,
+        "antimony_text": request.antimony_text,
+        "requested_times": list(request.requested_times),
+        "requested_output_ids": list(request.requested_output_ids),
+        "parameter_overrides": dict(request.parameter_overrides),
+        "initial_value_overrides": dict(request.initial_value_overrides),
+        "interventions": [_step_intervention_to_dict(iv) for iv in request.interventions],
+        "integrator": request.integrator,
+        "absolute_tolerance": request.absolute_tolerance,
+        "relative_tolerance": request.relative_tolerance,
+        "correlation_id": request.correlation_id,
+        "submitted_at": request.submitted_at,
+    }
+
+
+def model_scenario_evaluation_request_from_dict(
+    data: dict,
+) -> WorkbenchModelScenarioEvaluationRequest:
+    """Parse a plain dict into a ``WorkbenchModelScenarioEvaluationRequest``. Raises
+    ``KeyError``/``TypeError`` on a malformed request -- the canonical entrypoint catches these
+    and reports ``WorkbenchRunErrorCode.MALFORMED_REQUEST``, never a traceback."""
+    return WorkbenchModelScenarioEvaluationRequest(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        antimony_text=data["antimony_text"],
+        requested_times=tuple(data["requested_times"]),
+        requested_output_ids=tuple(data["requested_output_ids"]),
+        parameter_overrides=dict(data.get("parameter_overrides", {})),
+        initial_value_overrides=dict(data.get("initial_value_overrides", {})),
+        interventions=tuple(
+            _step_intervention_from_dict(iv) for iv in data.get("interventions", ())
+        ),
+        integrator=data.get("integrator", "cvode"),
+        absolute_tolerance=data.get("absolute_tolerance", 1e-10),
+        relative_tolerance=data.get("relative_tolerance", 1e-8),
+        correlation_id=data.get("correlation_id"),
+        submitted_at=data.get("submitted_at"),
+    )
+
+
+def model_scenario_evaluation_result_to_dict(
+    result: WorkbenchModelScenarioEvaluationResult,
+) -> dict:
+    """Serialize a ``WorkbenchModelScenarioEvaluationResult`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": result.contract_version,
+        "run_id": result.run_id,
+        "status": result.status.value,
+        "evaluation_status": result.evaluation_status,
+        "predictions": (
+            None
+            if result.predictions is None
+            else {k: list(v) for k, v in result.predictions.items()}
+        ),
+        "validation_errors": list(result.validation_errors),
+        "solver_message": result.solver_message,
+        "antimony_version": result.antimony_version,
+        "roadrunner_version": result.roadrunner_version,
+        "started_at": result.started_at,
+        "completed_at": result.completed_at,
+        "error": (
+            None
+            if result.error is None
+            else {
+                "code": result.error.code,
+                "message": result.error.message,
+                "stage_name": result.error.stage_name,
+            }
+        ),
+        "summary": result.summary,
+        "replayed": result.replayed,
+    }
+
+
+def model_scenario_evaluation_result_from_dict(
+    data: dict,
+) -> WorkbenchModelScenarioEvaluationResult:
+    """The inverse of ``model_scenario_evaluation_result_to_dict`` -- used to load a cached
+    result for replay."""
+    error_data = data.get("error")
+    error = (
+        None
+        if error_data is None
+        else WorkbenchRunError(
+            code=error_data["code"],
+            message=error_data["message"],
+            stage_name=error_data.get("stage_name"),
+        )
+    )
+    predictions_data = data.get("predictions")
+    predictions = (
+        None
+        if predictions_data is None
+        else {k: tuple(v) for k, v in predictions_data.items()}
+    )
+    return WorkbenchModelScenarioEvaluationResult(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        status=WorkbenchRunStatus(data["status"]),
+        evaluation_status=data["evaluation_status"],
+        predictions=predictions,
+        validation_errors=tuple(data.get("validation_errors", ())),
+        solver_message=data.get("solver_message"),
+        antimony_version=data.get("antimony_version"),
+        roadrunner_version=data.get("roadrunner_version"),
+        started_at=data.get("started_at"),
+        completed_at=data.get("completed_at"),
+        error=error,
+        summary=data.get("summary", ""),
+        replayed=bool(data.get("replayed", False)),
+    )
+
+
 #: Module-Level Agent4 Calibration increment -- a fifth, genuinely separate contract: this one
 #: names calibrating one already-accepted hierarchy module's own standalone executable
 #: artifact through Agent 2, Agent 3, then Agent 4 against Workbench-supplied experimental
@@ -1675,6 +1898,7 @@ __all__ = [
     "WORKBENCH_HIERARCHICAL_CONTRACT_VERSION",
     "WORKBENCH_HIERARCHICAL_RESUME_CONTRACT_VERSION",
     "WORKBENCH_MODEL_ANTIMONY_VERIFICATION_CONTRACT_VERSION",
+    "WORKBENCH_MODEL_SCENARIO_EVALUATION_CONTRACT_VERSION",
     "WORKBENCH_MODULE_BOUNDARY_DERIVATION_CONTRACT_VERSION",
     "WORKBENCH_MODULE_CALIBRATION_CONTRACT_VERSION",
     "WORKBENCH_MODULE_REMATERIALIZATION_CONTRACT_VERSION",
@@ -1688,6 +1912,8 @@ __all__ = [
     "WorkbenchInvocationRequest",
     "WorkbenchModelAntimonyVerificationRequest",
     "WorkbenchModelAntimonyVerificationResult",
+    "WorkbenchModelScenarioEvaluationRequest",
+    "WorkbenchModelScenarioEvaluationResult",
     "WorkbenchModuleBoundaryDerivationRequest",
     "WorkbenchModuleBoundaryDerivationResult",
     "WorkbenchModuleCalibrationRequest",
@@ -1704,6 +1930,7 @@ __all__ = [
     "WorkbenchRunErrorCode",
     "WorkbenchRunResult",
     "WorkbenchRunStatus",
+    "WorkbenchStepIntervention",
     "hierarchical_request_from_dict",
     "hierarchical_result_from_dict",
     "hierarchical_result_to_dict",
@@ -1713,6 +1940,10 @@ __all__ = [
     "model_antimony_verification_request_to_dict",
     "model_antimony_verification_result_from_dict",
     "model_antimony_verification_result_to_dict",
+    "model_scenario_evaluation_request_from_dict",
+    "model_scenario_evaluation_request_to_dict",
+    "model_scenario_evaluation_result_from_dict",
+    "model_scenario_evaluation_result_to_dict",
     "module_boundary_derivation_request_from_dict",
     "module_boundary_derivation_request_to_dict",
     "module_boundary_derivation_result_from_dict",
