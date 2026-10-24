@@ -372,6 +372,14 @@ MODEL_ANTIMONY_VERIFICATION_WORKFLOW_POLICY_VERSION = "model-antimony-verificati
 #: is never invoked by this workflow.
 MODEL_SCENARIO_EVALUATION_WORKFLOW_POLICY_VERSION = "model-scenario-evaluation-workflow-v1"
 
+#: Whole-Model Antimony Import increment -- ``app.harness.model_antimony_import``'s own
+#: request/result shape (auditing fidelity -- rule/event counts, which construct, if any, was
+#: rejected and why -- for caller-supplied Antimony text through Agent 2's own, unmodified
+#: ``import_antimony``). Audit only, never a replacement for ``model_antimony_verification``'s
+#: own real executability check and catalog capture, which stays entirely unmodified and is
+#: still called separately, unchanged, for the same uploaded text.
+MODEL_ANTIMONY_IMPORT_WORKFLOW_POLICY_VERSION = "model-antimony-import-workflow-v1"
+
 __all__ = [
     "AGENT1_CONTRACT_VERSION",
     "AGENT2_BUILD_REQUEST_CONTRACT_VERSION",
@@ -389,6 +397,7 @@ __all__ = [
     "HARNESS_CONTRACT_VERSION",
     "HIERARCHICAL_RECURSION_CHECKPOINT_VERSION",
     "HIERARCHICAL_RECURSION_POLICY_VERSION",
+    "MODEL_ANTIMONY_IMPORT_WORKFLOW_POLICY_VERSION",
     "MODEL_ANTIMONY_VERIFICATION_WORKFLOW_POLICY_VERSION",
     "MODEL_SCENARIO_EVALUATION_WORKFLOW_POLICY_VERSION",
     "MODULE_BOUNDARY_DERIVATION_WORKFLOW_POLICY_VERSION",

@@ -116,6 +116,13 @@ class WorkbenchRunErrorCode(StrEnum):
     #: ``INVALID_REQUEST``/``SIMULATION_FAILED``/``NUMERICAL_INSTABILITY`` are all carried
     #: through verbatim in the result's own ``evaluation_status``/``validation_errors``).
     MODEL_SCENARIO_EVALUATION_FAILED = "MODEL_SCENARIO_EVALUATION_FAILED"
+    #: Whole-Model Antimony Import increment:
+    #: ``app.harness.model_antimony_import.ModelAntimonyImportWorkflowError`` -- a malformed
+    #: request or an Agent 2 subprocess crash/timeout/malformed output. Never produced for a
+    #: real, disclosed Agent 2 import outcome (``MALFORMED``/``UNSUPPORTED_CONSTRUCT``/
+    #: ``AMBIGUOUS_MODULE`` are all carried through verbatim in the result's own
+    #: ``import_error_kind``/``import_message``).
+    MODEL_ANTIMONY_IMPORT_FAILED = "MODEL_ANTIMONY_IMPORT_FAILED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1573,6 +1580,167 @@ def model_scenario_evaluation_result_from_dict(
     )
 
 
+#: Whole-Model Antimony Import increment -- a genuinely separate contract: this one audits
+#: fidelity (rule/event counts, which construct -- if any -- was rejected and why) for
+#: caller-supplied Antimony text through Agent 2's own, pre-existing, unmodified
+#: ``app.agent2.antimony_import.import_antimony`` directly -- never Agent 1, never a
+#: structured network. Deliberately independent of ``model_antimony_verification`` (which
+#: still does the real executability check and species/parameter/compartment catalog capture,
+#: through Agent 3, unmodified) -- this contract is audit-only and never a replacement for it.
+WORKBENCH_MODEL_ANTIMONY_IMPORT_CONTRACT_VERSION = "workbench-model-antimony-import-v1"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModelAntimonyImportRequest:
+    """What the Workbench sends to audit one whole model's own caller-supplied (never Agent
+    1/2-produced) Antimony text for import fidelity."""
+
+    contract_version: str
+    run_id: str
+    antimony_text: str
+    correlation_id: str | None = None
+    submitted_at: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkbenchModelAntimonyImportResult:
+    """What the harness reports back for one ``WorkbenchModelAntimonyImportRequest``.
+
+    ``status`` is ``SUCCEEDED`` whenever the import attempt *ran* -- even when
+    ``import_succeeded`` is ``False`` (a real, reported, disclosed outcome: malformed source,
+    an unsupported construct, or an ambiguous module -- never an infrastructure error).
+    ``import_error_kind`` is one of ``"MALFORMED"``/``"UNSUPPORTED_CONSTRUCT"``/
+    ``"AMBIGUOUS_MODULE"`` (mirroring Agent 2's own three-exception hierarchy verbatim,
+    ``app.agent2.antimony_import.errors``), or ``None`` when ``import_succeeded`` is ``True``.
+    """
+
+    contract_version: str
+    run_id: str
+    status: WorkbenchRunStatus
+    import_succeeded: bool
+    import_error_kind: str | None
+    import_message: str | None
+    compartment_ids: tuple[str, ...]
+    #: ``compartment_id`` -> Agent 2's own structural display name (``is "..."`` directives;
+    #: otherwise identical to the id) -- a detail Agent-3-side verification has no notion of.
+    compartment_names: dict[str, str]
+    species_ids: tuple[str, ...]
+    #: ``species_id`` -> its own compartment id -- Agent 2's own structural context,
+    #: unavailable from Agent-3-side verification's flat species-id lists alone.
+    species_compartment_ids: dict[str, str]
+    parameter_ids: tuple[str, ...]
+    reaction_ids: tuple[str, ...]
+    assignment_rule_count: int
+    rate_rule_count: int
+    algebraic_rule_count: int
+    event_count: int
+    antimony_import_parser_version: str | None
+    started_at: str | None
+    completed_at: str | None
+    error: WorkbenchRunError | None
+    summary: str
+    replayed: bool = False
+
+
+def model_antimony_import_request_to_dict(request: WorkbenchModelAntimonyImportRequest) -> dict:
+    """Serialize a ``WorkbenchModelAntimonyImportRequest`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": request.contract_version,
+        "run_id": request.run_id,
+        "antimony_text": request.antimony_text,
+        "correlation_id": request.correlation_id,
+        "submitted_at": request.submitted_at,
+    }
+
+
+def model_antimony_import_request_from_dict(data: dict) -> WorkbenchModelAntimonyImportRequest:
+    """Parse a plain dict into a ``WorkbenchModelAntimonyImportRequest``. Raises
+    ``KeyError``/``TypeError`` on a malformed request -- the canonical entrypoint catches these
+    and reports ``WorkbenchRunErrorCode.MALFORMED_REQUEST``, never a traceback."""
+    return WorkbenchModelAntimonyImportRequest(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        antimony_text=data["antimony_text"],
+        correlation_id=data.get("correlation_id"),
+        submitted_at=data.get("submitted_at"),
+    )
+
+
+def model_antimony_import_result_to_dict(result: WorkbenchModelAntimonyImportResult) -> dict:
+    """Serialize a ``WorkbenchModelAntimonyImportResult`` to a plain, JSON-ready dict."""
+    return {
+        "contract_version": result.contract_version,
+        "run_id": result.run_id,
+        "status": result.status.value,
+        "import_succeeded": result.import_succeeded,
+        "import_error_kind": result.import_error_kind,
+        "import_message": result.import_message,
+        "compartment_ids": list(result.compartment_ids),
+        "compartment_names": dict(result.compartment_names),
+        "species_ids": list(result.species_ids),
+        "species_compartment_ids": dict(result.species_compartment_ids),
+        "parameter_ids": list(result.parameter_ids),
+        "reaction_ids": list(result.reaction_ids),
+        "assignment_rule_count": result.assignment_rule_count,
+        "rate_rule_count": result.rate_rule_count,
+        "algebraic_rule_count": result.algebraic_rule_count,
+        "event_count": result.event_count,
+        "antimony_import_parser_version": result.antimony_import_parser_version,
+        "started_at": result.started_at,
+        "completed_at": result.completed_at,
+        "error": (
+            None
+            if result.error is None
+            else {
+                "code": result.error.code,
+                "message": result.error.message,
+                "stage_name": result.error.stage_name,
+            }
+        ),
+        "summary": result.summary,
+        "replayed": result.replayed,
+    }
+
+
+def model_antimony_import_result_from_dict(data: dict) -> WorkbenchModelAntimonyImportResult:
+    """The inverse of ``model_antimony_import_result_to_dict`` -- used to load a cached result
+    for replay."""
+    error_data = data.get("error")
+    error = (
+        None
+        if error_data is None
+        else WorkbenchRunError(
+            code=error_data["code"],
+            message=error_data["message"],
+            stage_name=error_data.get("stage_name"),
+        )
+    )
+    return WorkbenchModelAntimonyImportResult(
+        contract_version=data["contract_version"],
+        run_id=data["run_id"],
+        status=WorkbenchRunStatus(data["status"]),
+        import_succeeded=bool(data["import_succeeded"]),
+        import_error_kind=data.get("import_error_kind"),
+        import_message=data.get("import_message"),
+        compartment_ids=tuple(data.get("compartment_ids", ())),
+        compartment_names=dict(data.get("compartment_names", {})),
+        species_ids=tuple(data.get("species_ids", ())),
+        species_compartment_ids=dict(data.get("species_compartment_ids", {})),
+        parameter_ids=tuple(data.get("parameter_ids", ())),
+        reaction_ids=tuple(data.get("reaction_ids", ())),
+        assignment_rule_count=data.get("assignment_rule_count", 0),
+        rate_rule_count=data.get("rate_rule_count", 0),
+        algebraic_rule_count=data.get("algebraic_rule_count", 0),
+        event_count=data.get("event_count", 0),
+        antimony_import_parser_version=data.get("antimony_import_parser_version"),
+        started_at=data.get("started_at"),
+        completed_at=data.get("completed_at"),
+        error=error,
+        summary=data.get("summary", ""),
+        replayed=bool(data.get("replayed", False)),
+    )
+
+
 #: Module-Level Agent4 Calibration increment -- a fifth, genuinely separate contract: this one
 #: names calibrating one already-accepted hierarchy module's own standalone executable
 #: artifact through Agent 2, Agent 3, then Agent 4 against Workbench-supplied experimental
@@ -1897,6 +2065,7 @@ __all__ = [
     "WORKBENCH_HARNESS_CONTRACT_VERSION",
     "WORKBENCH_HIERARCHICAL_CONTRACT_VERSION",
     "WORKBENCH_HIERARCHICAL_RESUME_CONTRACT_VERSION",
+    "WORKBENCH_MODEL_ANTIMONY_IMPORT_CONTRACT_VERSION",
     "WORKBENCH_MODEL_ANTIMONY_VERIFICATION_CONTRACT_VERSION",
     "WORKBENCH_MODEL_SCENARIO_EVALUATION_CONTRACT_VERSION",
     "WORKBENCH_MODULE_BOUNDARY_DERIVATION_CONTRACT_VERSION",
@@ -1910,6 +2079,8 @@ __all__ = [
     "WorkbenchHierarchicalRunResult",
     "WorkbenchHierarchyNodeSummary",
     "WorkbenchInvocationRequest",
+    "WorkbenchModelAntimonyImportRequest",
+    "WorkbenchModelAntimonyImportResult",
     "WorkbenchModelAntimonyVerificationRequest",
     "WorkbenchModelAntimonyVerificationResult",
     "WorkbenchModelScenarioEvaluationRequest",
@@ -1936,6 +2107,10 @@ __all__ = [
     "hierarchical_result_to_dict",
     "hierarchical_resume_request_from_dict",
     "hierarchical_resume_request_to_dict",
+    "model_antimony_import_request_from_dict",
+    "model_antimony_import_request_to_dict",
+    "model_antimony_import_result_from_dict",
+    "model_antimony_import_result_to_dict",
     "model_antimony_verification_request_from_dict",
     "model_antimony_verification_request_to_dict",
     "model_antimony_verification_result_from_dict",
